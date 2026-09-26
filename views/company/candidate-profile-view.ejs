@@ -1,4 +1,6 @@
 <% layout('layouts/boilerplate') %>
+<% const permissionList = typeof permissions !== 'undefined' && Array.isArray(permissions) ? permissions : []; %>
+<% const canReviewApplications = permissionList.includes('applications:review'); %>
 <% const candidateSkillProfiles = (typeof skillProfiles !== 'undefined' && Array.isArray(skillProfiles) && skillProfiles.length)
     ? skillProfiles
     : ((candidate && Array.isArray(candidate.skills))

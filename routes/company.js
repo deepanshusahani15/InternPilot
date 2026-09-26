@@ -1108,6 +1108,7 @@ router.get('/company/applications/:id/candidate', isAuthenticated, requireCompan
             application,
             candidate: application.candidate,
             internship,
+            permissions: req.companyPermissions,
             skillProfiles: buildSkillProfiles(application.candidate)
         });
     } catch (error) {
