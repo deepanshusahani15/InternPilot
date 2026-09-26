@@ -1,0 +1,150 @@
+<%
+    // What the resume parser found on the latest upload, next to what the
+    // profile holds now. Hidden when the resume on file isn't the parsed one,
+    // e.g. a replacement that was never confirmed in the conflict step.
+    const rp = typeof parse !== 'undefined' && parse ? parse : null;
+    const me = typeof profile !== 'undefined' && profile ? profile : null;
+    const fileOnRecord = me ? (me.resume || me.resumeUrl || '') : '';
+    const showParse = Boolean(rp && rp.resumeUrl && rp.resumeUrl === fileOnRecord);
+%>
+<% if (showParse) { %>
+<%
+    const norm = value => String(value || '').trim().toLowerCase();
+    const profileSkills = (Array.isArray(me.skills) ? me.skills : []).filter(Boolean);
+    const inProfile = new Set(profileSkills.map(norm));
+    const addedByParse = new Set((rp.newSkills || []).map(norm));
+    const foundSkills = Array.isArray(rp.skills) ? rp.skills : [];
+    const fromResume = profileSkills.filter(skill => addedByParse.has(norm(skill)));
+    const byYou = profileSkills.filter(skill => !addedByParse.has(norm(skill)));
+    const currentDegree = (me.education && me.education.qualification) || me.qualification || '';
+
+    const statusInfo = {
+        ok: {
+            pill: 'Read successfully',
+            pillClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            icon: 'ph-check-circle',
+            note: ''
+        },
+        low_confidence: {
+            pill: 'Check this',
+            pillClass: 'bg-amber-50 text-amber-800 border-amber-200',
+            icon: 'ph-warning',
+            noteClass: 'bg-amber-50 border-amber-200 text-amber-800',
+            note: 'We could only pick up a little from this file, so some details may be missing. Check the list below and add anything we missed.'
+        },
+        nothing_found: {
+            pill: 'Nothing recognised',
+            pillClass: 'bg-amber-50 text-amber-800 border-amber-200',
+            icon: 'ph-warning',
+            noteClass: 'bg-amber-50 border-amber-200 text-amber-800',
+            note: "We read the file but didn't recognise any skills or a degree from our list, so nothing was added to your profile. Add your skills and education yourself."
+        },
+        unreadable: {
+            pill: "Couldn't read",
+            pillClass: 'bg-rose-50 text-rose-700 border-rose-200',
+            icon: 'ph-x-circle',
+            noteClass: 'bg-rose-50 border-rose-200 text-rose-700',
+            note: "We couldn't read any text from this file. Scanned PDFs and photos of a resume can't be read. Your resume is still saved, but nothing was added to your profile. A text-based PDF or Word file works best."
+        }
+    }[rp.status] || {
+        pill: 'Parsed',
+        pillClass: 'bg-slate-50 text-slate-600 border-slate-200',
+        icon: 'ph-info',
+        note: ''
+    };
+
+    // How each skill found in the resume stands in the profile today.
+    const skillState = skill => {
+        const key = norm(skill);
+        if (!inProfile.has(key)) return 'missing';
+        return addedByParse.has(key) ? 'added' : 'had';
+    };
+    const stateStyle = {
+        added: { chip: 'bg-indigo-50 border-indigo-200 text-indigo-800', tag: 'added', title: 'Added to your profile from this resume' },
+        had: { chip: 'bg-slate-50 border-slate-200 text-slate-700', tag: 'already had', title: 'Already in your profile before this upload' },
+        missing: { chip: 'bg-white border-dashed border-slate-300 text-slate-500', tag: 'not in profile', title: 'Found in your resume but not in your profile now' }
+    };
+
+    let degreeNote = '';
+    if (rp.qualification) {
+        if (norm(currentDegree) === norm(rp.qualification)) {
+            degreeNote = rp.previousQualification ? 'matches your profile' : 'added to your profile';
+        } else if (currentDegree) {
+            degreeNote = 'your profile says ' + currentDegree;
+        } else {
+            degreeNote = 'not in your profile';
+        }
+    }
+%>
+<section id="resumeParseSummary" class="border border-slate-200 rounded-xl p-4 space-y-3" aria-labelledby="resumeParseTitle">
+    <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-2">
+        <div class="min-w-0">
+            <h3 id="resumeParseTitle" class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <i class="ph-bold ph-scan text-indigo-600" aria-hidden="true"></i>
+                What we read from your resume
+            </h3>
+            <p class="text-[11px] text-slate-500 mt-0.5 truncate">
+                <%= rp.fileName || 'Your resume' %><% if (rp.parsedAtLabel) { %> · <span title="<%= rp.parsedAtLabel %>"><%= rp.parsedAgo || rp.parsedAtLabel %></span><% } %>
+            </p>
+        </div>
+        <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border <%= statusInfo.pillClass %>" data-parse-status="<%= rp.status %>">
+            <i class="ph-bold <%= statusInfo.icon %>" aria-hidden="true"></i>
+            <%= statusInfo.pill %>
+        </span>
+    </div>
+
+    <% if (statusInfo.note) { %>
+        <p class="text-xs leading-relaxed border rounded-lg px-3 py-2 <%= statusInfo.noteClass %>" role="status"><%= statusInfo.note %></p>
+    <% } %>
+
+    <dl class="space-y-2.5 text-xs">
+        <div>
+            <dt class="text-[11px] font-bold text-slate-700 mb-1">Skills found (<%= foundSkills.length %>)</dt>
+            <dd>
+                <% if (foundSkills.length) { %>
+                    <ul class="flex flex-wrap gap-1.5" aria-label="Skills found in your resume">
+                        <% foundSkills.forEach(skill => { const state = skillState(skill); %>
+                            <li class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-medium <%= stateStyle[state].chip %>"
+                                data-parse-skill="<%= state %>" title="<%= stateStyle[state].title %>">
+                                <%= skill %>
+                                <span class="text-[9px] font-bold uppercase tracking-wide opacity-75"><%= stateStyle[state].tag %></span>
+                            </li>
+                        <% }) %>
+                    </ul>
+                <% } else { %>
+                    <p class="text-slate-500">No skills from our list were found.</p>
+                <% } %>
+            </dd>
+        </div>
+        <div>
+            <dt class="text-[11px] font-bold text-slate-700 mb-0.5">Qualification</dt>
+            <dd data-parse-degree>
+                <% if (rp.qualification) { %>
+                    <span class="font-semibold text-slate-800"><%= rp.qualification %></span>
+                    <span class="text-[11px] text-slate-500">· <%= degreeNote %></span>
+                <% } else { %>
+                    <span class="text-slate-500">Not found in your resume</span>
+                <% } %>
+            </dd>
+        </div>
+    </dl>
+
+    <div class="border-t border-slate-100 pt-2.5">
+        <p class="text-[11px] font-bold text-slate-700 mb-1.5">Where your profile skills came from</p>
+        <div class="grid sm:grid-cols-2 gap-2">
+            <div class="rounded-lg bg-indigo-50/60 border border-indigo-100 p-2" data-skill-source="resume">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-indigo-700 mb-1">From this resume (<%= fromResume.length %>)</p>
+                <p class="text-xs text-slate-700 leading-relaxed"><%= fromResume.length ? fromResume.join(', ') : 'None' %></p>
+            </div>
+            <div class="rounded-lg bg-slate-50 border border-slate-200 p-2" data-skill-source="you">
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-600 mb-1">Added by you (<%= byYou.length %>)</p>
+                <p class="text-xs text-slate-700 leading-relaxed"><%= byYou.length ? byYou.join(', ') : 'None' %></p>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-[11px] text-slate-500 leading-relaxed">
+        We match your resume against a list of common skills and degrees. Experience, projects and anything outside that list aren't read yet, so add those yourself. Skills from earlier uploads count as added by you.
+    </p>
+</section>
+<% } %>

@@ -18,6 +18,7 @@ const { isAuthenticated, authorize } = require('../middleware/auth');
 const { documentUpload, uploadBufferToCloudinary } = require('../middleware/upload');
 const { calculateSkillScore } = require('../utils/skillMatch');
 const { detectProfileConflicts } = require('../utils/conflictDetector');
+const { recordResumeParse } = require('../utils/resumeParse');
 const { formatRelativeTime, formatLocalizedDateTime } = require('../utils/dateFormat');
 
 cloudinary.config({
@@ -415,6 +416,15 @@ router.post('/candidate/parse-resume', isAuthenticated, authorize('candidate'), 
         else if (/MCA|Master of Computer Applications/i.test(text)) extractedQualification = 'MCA';
 
         const resumeQuality = await analyzeResumeQuality(text);
+
+        // Keep what the parser found so the profile page can show it (#20).
+        await recordResumeParse(req, {
+            resumeUrl,
+            fileName: resumeOriginalName,
+            text,
+            skills: extractedSkills,
+            qualification: extractedQualification
+        });
 
         // ── Build the parsed-data object for conflict detection ────
         const parsedData = {};

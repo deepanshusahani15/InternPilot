@@ -123,6 +123,9 @@ async function main() {
 // count is available to the header on all pages, the homepage included.
 app.use(require('./routes/messages'));
 
+// Resume parser details (#20) for the candidate profile page.
+app.use(require('./routes/resumeParse'));
+
 // Homepage Route (Renders views/extras/index.ejs)
 app.get('/', async (req, res) => {
     try {
