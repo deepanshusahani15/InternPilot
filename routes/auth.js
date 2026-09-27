@@ -89,62 +89,43 @@ router.post('/register', async (req, res) => {
 
         const existing = await User.findOne({ email: normalizedEmail });
 
-        // If user already exists in DB
+        // An existing, unverified account only receives a new code through the
+        // same atomic cooldown and hourly-limit path as /resend-otp. Never
+        // reset its counters or overwrite its pending profile/password from a
+        // public registration request.
         if (existing) {
             if (existing.isEmailVerified) {
                 console.log('Status: User exists and is already verified.');
                 req.flash('error_msg', 'Email already registered. Please log in.');
                 return res.redirect('/auth/register');
-            } else {
-                console.log('Status: User exists but is unverified. Checking cooldown...');
-                const COOLDOWN_SECONDS = 60;
-                const now = Date.now();
+            }
 
-                if (existing.lastOtpSentAt) {
-                    const elapsedSeconds = Math.floor((now - new Date(existing.lastOtpSentAt).getTime()) / 1000);
-                    if (elapsedSeconds < COOLDOWN_SECONDS) {
-                        const remainingSeconds = COOLDOWN_SECONDS - elapsedSeconds;
-                        req.flash('error_msg', `Please wait ${remainingSeconds}s before requesting a new code.`);
-                        return res.redirect(`/auth/verify-otp?email=${encodeURIComponent(normalizedEmail)}`);
-                    }
-                }
+            const now = new Date();
+            const config = otpSecurityConfig();
+            const otp = generateSecureOTP();
+            const updatedUser = await User.findOneAndUpdate(
+                resendEligibilityQuery(normalizedEmail, now, config),
+                resendOtpUpdate(otp, now, config),
+                { new: true, updatePipeline: true }
+            );
 
-                const otp = generateSecureOTP();
-                existing.name = trimmedName;
-                existing.role = selectedRole;
-                existing.password = password;
-                Object.assign(existing, freshOtpState(otp, new Date(now), otpSecurityConfig()));
-
-                if (selectedRole === 'company') {
-                    existing.companyDetails = {
-                        companyName: trimmedCompanyName,
-                        cin: trimmedCin,
-                        industry: trimmedIndustry,
-                        isVerified: false,
-                        verificationStatus: 'pending',
-                        verificationSubmittedAt: new Date(),
-                        verificationHistory: [{
-                            status: 'pending',
-                            reason: 'Company account registered.',
-                            changedAt: new Date()
-                        }]
-                    };
-                    existing.companyId = existing._id;
-                }
-
-                await existing.save();
-
-                try {
-                    await sendOTPEmail(normalizedEmail, otp);
-                    console.log(`--> Fresh verification code successfully sent to: ${normalizedEmail}`);
-                    req.flash('success_msg', 'A new verification code has been sent to your email.');
-                } catch (emailErr) {
-                    console.error('--> Failed to send updated OTP email:', emailErr.message);
-                    req.flash('error_msg', "Account updated, but we couldn't send the code. Please click Resend OTP.");
-                }
-
+            if (!updatedUser) {
+                await User.updateOne(
+                    { email: normalizedEmail, isEmailVerified: false },
+                    resendRateLimitAuditUpdate(now)
+                );
+                req.flash('success_msg', GENERIC_RESEND_MESSAGE);
                 return res.redirect(`/auth/verify-otp?email=${encodeURIComponent(normalizedEmail)}`);
             }
+
+            try {
+                await sendOTPEmail(normalizedEmail, otp);
+            } catch (emailErr) {
+                console.error('Registration resend OTP delivery failed:', emailErr);
+            }
+
+            req.flash('success_msg', GENERIC_RESEND_MESSAGE);
+            return res.redirect(`/auth/verify-otp?email=${encodeURIComponent(normalizedEmail)}`);
         }
 
         const otp = generateSecureOTP();
@@ -238,7 +219,7 @@ router.post('/verify-otp', async (req, res) => {
             await User.findOneAndUpdate(
                 activeOtpFailureQuery(email, otp, now, config),
                 failedVerificationUpdate(now, config),
-                { new: true }
+                { new: true, updatePipeline: true }
             );
             req.flash('error_msg', GENERIC_VERIFICATION_ERROR);
             return res.redirect(redirectPath);
@@ -274,7 +255,7 @@ router.post('/resend-otp', async (req, res) => {
         const updatedUser = await User.findOneAndUpdate(
             resendEligibilityQuery(email, now, config),
             resendOtpUpdate(otp, now, config),
-            { new: true }
+            { new: true, updatePipeline: true }
         );
 
         if (!updatedUser) {

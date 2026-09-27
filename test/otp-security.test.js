@@ -93,6 +93,21 @@ test('resends have one atomic cooldown-and-hourly-quota condition and reset a fr
     assert.equal(update[0].$set.otpSecurityEvents.$slice[1], -OTP_SECURITY_EVENT_LIMIT);
 });
 
+test('Mongoose preserves the atomic OTP resend and failed-attempt update pipelines', () => {
+    const now = new Date('2026-09-27T10:00:00Z');
+    const config = otpSecurityConfig();
+    const resendQuery = resendEligibilityQuery('asha@example.test', now, config);
+    const resendUpdate = resendOtpUpdate('654321', now, config);
+    const failureQuery = activeOtpFailureQuery('asha@example.test', '000000', now, config);
+    const failureUpdate = failedVerificationUpdate(now, config);
+
+    const resendOperation = User.findOneAndUpdate(resendQuery, resendUpdate, { new: true, updatePipeline: true });
+    const failureOperation = User.findOneAndUpdate(failureQuery, failureUpdate, { new: true, updatePipeline: true });
+
+    assert.deepEqual(resendOperation.getUpdate(), resendUpdate);
+    assert.deepEqual(failureOperation.getUpdate(), failureUpdate);
+});
+
 test('failed verification updates are capped, invalidate the OTP at the threshold, and keep a bounded audit history', () => {
     const now = new Date('2026-09-27T10:00:00Z');
     const config = otpSecurityConfig({ OTP_VERIFY_MAX_ATTEMPTS: '5' });
@@ -140,6 +155,24 @@ test('OTP inputs are primitive and generic responses do not disclose account exi
 test('verification and resend endpoints are registered', () => {
     assert.ok(routeLayer(authRouter, '/verify-otp', 'post'));
     assert.ok(routeLayer(authRouter, '/resend-otp', 'post'));
+});
+
+test('unverified re-registration uses the same resend quota without resetting pending account data', () => {
+    const authSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
+    const existingAccountStart = authSource.indexOf('if (existing) {');
+    const existingAccountEnd = authSource.indexOf(
+        '        const otp = generateSecureOTP();\n        const otpState',
+        existingAccountStart
+    );
+    const existingAccountSection = authSource.slice(existingAccountStart, existingAccountEnd);
+
+    assert.match(existingAccountSection, /resendEligibilityQuery\(normalizedEmail, now, config\)/);
+    assert.match(existingAccountSection, /resendOtpUpdate\(otp, now, config\)/);
+    assert.match(existingAccountSection, /resendRateLimitAuditUpdate\(now\)/);
+    assert.doesNotMatch(existingAccountSection, /freshOtpState\(/);
+    assert.doesNotMatch(existingAccountSection, /existing\.password\s*=/);
+    assert.doesNotMatch(existingAccountSection, /existing\.name\s*=/);
+    assert.doesNotMatch(existingAccountSection, /existing\.role\s*=/);
 });
 
 test('the admin account detail exposes OTP security history without a code or IP field', () => {
