@@ -11,6 +11,8 @@ const {
     RegistrationSecurityError,
     registrationRateLimitConfig,
     publicCaptchaConfig,
+    registrationRateLimitKey,
+    MongoRegistrationRateLimitStore,
     createRegistrationRateLimiter,
     captchaToken,
     verifyCaptcha
@@ -68,6 +70,7 @@ test('hCaptcha verification posts token and IP to the configured service', async
     const form = new URLSearchParams(request.options.body);
     assert.equal(form.get('secret'), 'server-secret');
     assert.equal(form.get('response'), 'signed-token');
+    assert.equal(form.get('sitekey'), 'site-key');
     assert.equal(form.get('remoteip'), '203.0.113.42');
 });
 
@@ -99,8 +102,88 @@ test('CAPTCHA validation fails closed for missing configuration, rejected tokens
     );
 });
 
+test('CAPTCHA timeout remains active while its response body is being read', async () => {
+    await assert.rejects(
+        () => verifyCaptcha({
+            token: 'token',
+            config: {
+                provider: 'hcaptcha',
+                siteKey: 'site',
+                secretKey: 'secret',
+                verifyUrl: 'https://captcha.example.test',
+                timeoutMs: 20
+            },
+            fetchImpl: async (_url, options) => ({
+                ok: true,
+                json: () => new Promise((resolve, reject) => {
+                    options.signal.addEventListener('abort', () => reject(new Error('response body stalled')), { once: true });
+                })
+            })
+        }),
+        error => error instanceof RegistrationSecurityError
+            && error.code === 'CAPTCHA_UNAVAILABLE'
+            && error.statusCode === 503
+    );
+});
+
+test('registration limit keys hash the IP and rotate with each fixed window', () => {
+    const req = { ip: '203.0.113.42' };
+    const config = { windowMs: 60_000 };
+    const env = { REGISTRATION_RATE_LIMIT_SECRET: 'dedicated-secret' };
+    const firstKey = registrationRateLimitKey(req, config, env, 125_000);
+
+    assert.match(firstKey, /^[a-f0-9]{64}:2$/);
+    assert.equal(firstKey.includes(req.ip), false);
+    assert.notEqual(firstKey, registrationRateLimitKey(req, config, env, 180_000));
+    assert.notEqual(firstKey, registrationRateLimitKey(req, config, { REGISTRATION_RATE_LIMIT_SECRET: 'other-secret' }, 125_000));
+});
+
+test('Mongo registration limiter increments a shared counter and sets a TTL window', async () => {
+    const calls = [];
+    const resetTime = new Date(180_000);
+    const Model = {
+        findOneAndUpdate: async (...args) => {
+            calls.push(args);
+            return { totalHits: 3, expiresAt: resetTime };
+        },
+        updateOne: async (...args) => calls.push(args),
+        deleteOne: async (...args) => calls.push(args),
+        deleteMany: async (...args) => calls.push(args)
+    };
+    const store = new MongoRegistrationRateLimitStore({ Model, windowMs: 60_000, now: () => 125_000 });
+
+    assert.deepEqual(await store.increment('hashed-ip:2'), { totalHits: 3, resetTime });
+    assert.deepEqual(calls[0], [
+        { key: 'hashed-ip:2' },
+        { $inc: { totalHits: 1 }, $setOnInsert: { expiresAt: resetTime } },
+        { new: true, upsert: true }
+    ]);
+
+    await store.decrement('hashed-ip:2');
+    await store.resetKey('hashed-ip:2');
+    await store.resetAll();
+    assert.deepEqual(calls.slice(1), [
+        [{ key: 'hashed-ip:2', totalHits: { $gt: 0 } }, { $inc: { totalHits: -1 } }],
+        [{ key: 'hashed-ip:2' }],
+        [{}]
+    ]);
+});
+
 test('registration limiter blocks an IP after its limit and supplies Retry-After', async () => {
-    const limiter = createRegistrationRateLimiter({ config: { limit: 2, windowMs: 60_000 } });
+    let hits = 0;
+    const limiter = createRegistrationRateLimiter({
+        config: { limit: 2, windowMs: 60_000 },
+        store: {
+            localKeys: true,
+            init() {},
+            async increment() {
+                hits += 1;
+                return { totalHits: hits, resetTime: new Date(Date.now() + 60_000) };
+            },
+            async decrement() {},
+            async resetKey() {}
+        }
+    });
 
     const hit = () => new Promise(async (resolve, reject) => {
         const headers = {};

@@ -1,4 +1,6 @@
+const crypto = require('crypto');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+const RegistrationRateLimit = require('../models/RegistrationRateLimit');
 
 const HCAPTCHA_VERIFY_URL = 'https://hcaptcha.com/siteverify';
 const GENERIC_CAPTCHA_ERROR = 'We could not verify this registration request. Please complete the CAPTCHA and try again.';
@@ -75,14 +77,66 @@ function requestIp(req) {
     return req.ip || req.socket?.remoteAddress || 'unknown';
 }
 
+function registrationRateLimitKey(req, config, env = process.env, now = Date.now()) {
+    const normalizedIp = ipKeyGenerator(requestIp(req));
+    // SESSION_SECRET is already required by the application. A dedicated key
+    // can be rotated independently in deployments that prefer it.
+    const secret = String(env.REGISTRATION_RATE_LIMIT_SECRET || env.SESSION_SECRET || 'internpilot-registration-limit').trim();
+    const fingerprint = crypto.createHash('sha256').update(`${secret}:${normalizedIp}`).digest('hex');
+    const bucket = Math.floor(now / config.windowMs);
+    return `${fingerprint}:${bucket}`;
+}
+
+class MongoRegistrationRateLimitStore {
+    constructor({ Model = RegistrationRateLimit, windowMs, now = Date.now } = {}) {
+        this.Model = Model;
+        this.windowMs = windowMs || 60 * 60 * 1000;
+        this.now = now;
+        this.localKeys = false;
+    }
+
+    init(options = {}) {
+        if (options.windowMs) this.windowMs = options.windowMs;
+    }
+
+    async increment(key) {
+        const timestamp = this.now();
+        const resetTime = new Date((Math.floor(timestamp / this.windowMs) + 1) * this.windowMs);
+        const entry = await this.Model.findOneAndUpdate(
+            { key },
+            { $inc: { totalHits: 1 }, $setOnInsert: { expiresAt: resetTime } },
+            { new: true, upsert: true }
+        );
+        return { totalHits: entry.totalHits, resetTime: entry.expiresAt };
+    }
+
+    async decrement(key) {
+        await this.Model.updateOne({ key, totalHits: { $gt: 0 } }, { $inc: { totalHits: -1 } });
+    }
+
+    async resetKey(key) {
+        await this.Model.deleteOne({ key });
+    }
+
+    async resetAll() {
+        await this.Model.deleteMany({});
+    }
+}
+
 function createRegistrationRateLimiter(options = {}) {
     const config = options.config || registrationRateLimitConfig(options.env);
+    const store = options.store || new MongoRegistrationRateLimitStore({
+        Model: options.Model,
+        windowMs: config.windowMs,
+        now: options.now
+    });
     return rateLimit({
         windowMs: config.windowMs,
         limit: config.limit,
         standardHeaders: 'draft-8',
         legacyHeaders: false,
-        keyGenerator: req => ipKeyGenerator(requestIp(req)),
+        store,
+        keyGenerator: req => registrationRateLimitKey(req, config, options.env),
         handler: (req, res) => {
             const resetTime = req.rateLimit?.resetTime;
             const retryAfterSeconds = resetTime
@@ -118,43 +172,40 @@ async function verifyCaptcha({ token, remoteIp, config = captchaConfig(), fetchI
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
-    let response;
-
     try {
         const form = new URLSearchParams({
             secret: config.secretKey,
-            response: token
+            response: token,
+            sitekey: config.siteKey
         });
         if (remoteIp) form.set('remoteip', remoteIp);
 
-        response = await fetchImpl(config.verifyUrl, {
+        const response = await fetchImpl(config.verifyUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: form.toString(),
             signal: controller.signal
         });
+
+        if (!response?.ok) {
+            throw new RegistrationSecurityError(GENERIC_CAPTCHA_ERROR, 'CAPTCHA_UNAVAILABLE', 503);
+        }
+
+        // The timeout stays live through body parsing. A response that sends
+        // headers but stalls its JSON body is therefore still fail-closed.
+        const result = await response.json();
+
+        if (result?.success !== true) {
+            throw new RegistrationSecurityError(GENERIC_CAPTCHA_ERROR, 'CAPTCHA_REJECTED', 400);
+        }
+
+        return true;
     } catch (error) {
+        if (error instanceof RegistrationSecurityError) throw error;
         throw new RegistrationSecurityError(GENERIC_CAPTCHA_ERROR, 'CAPTCHA_UNAVAILABLE', 503);
     } finally {
         clearTimeout(timeout);
     }
-
-    if (!response?.ok) {
-        throw new RegistrationSecurityError(GENERIC_CAPTCHA_ERROR, 'CAPTCHA_UNAVAILABLE', 503);
-    }
-
-    let result;
-    try {
-        result = await response.json();
-    } catch (error) {
-        throw new RegistrationSecurityError(GENERIC_CAPTCHA_ERROR, 'CAPTCHA_UNAVAILABLE', 503);
-    }
-
-    if (result?.success !== true) {
-        throw new RegistrationSecurityError(GENERIC_CAPTCHA_ERROR, 'CAPTCHA_REJECTED', 400);
-    }
-
-    return true;
 }
 
 function createCaptchaVerificationMiddleware(options = {}) {
@@ -187,6 +238,8 @@ module.exports = {
     registrationRateLimitConfig,
     captchaConfig,
     publicCaptchaConfig,
+    registrationRateLimitKey,
+    MongoRegistrationRateLimitStore,
     createRegistrationRateLimiter,
     captchaToken,
     verifyCaptcha,

@@ -284,8 +284,12 @@ CAPTCHA_PROVIDER=hcaptcha
 HCAPTCHA_SITE_KEY=your_hcaptcha_site_key
 HCAPTCHA_SECRET_KEY=your_hcaptcha_secret_key
 # Optional: 5 attempts per IP each hour is the secure default.
+# Limits use a MongoDB-backed shared store, so they apply across app processes
+# and survive an application restart during their active window.
 REGISTER_RATE_LIMIT_MAX=5
 REGISTER_RATE_LIMIT_WINDOW_MS=3600000
+# Optional dedicated secret used to hash IP rate-limit keys before storage.
+REGISTRATION_RATE_LIMIT_SECRET=replace_with_a_long_random_value
 ```
 
 ---
