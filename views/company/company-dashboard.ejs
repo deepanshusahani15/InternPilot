@@ -149,25 +149,31 @@
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2.5">
                 <!-- Status Filter Tabs -->
                 <div class="flex items-center gap-2 text-xs font-medium flex-wrap">
-                    <a href="/company/dashboard?status=all<%= (typeof currentSort !== 'undefined' && currentSort !== 'newest') ? '&sort=' + currentSort : '' %>"
-                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= (typeof currentFilter === 'undefined' || currentFilter === 'all') ? 'bg-indigo-600 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
-                        data-status="all">
+                    <% const dashboardFilterUrl = status => `/company/dashboard?status=${encodeURIComponent(status)}&sort=${encodeURIComponent(currentSort || 'newest')}`; %>
+                    <a href="<%= dashboardFilterUrl('all') %>"
+                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= currentFilter === 'all' ? 'bg-indigo-600 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
+                        data-status="all" <%= currentFilter === 'all' ? 'aria-current="page"' : '' %>>
                         All (<%= typeof totalCount !== 'undefined' ? totalCount : (internships ? internships.length : 0) %>)
                     </a>
-                    <a href="/company/dashboard?status=published<%= (typeof currentSort !== 'undefined' && currentSort !== 'newest') ? '&sort=' + currentSort : '' %>"
-                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= (typeof currentFilter !== 'undefined' && currentFilter === 'published') ? 'bg-emerald-600 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
-                        data-status="published">
-                        Published (<%= typeof publishedCount !== 'undefined' ? publishedCount : 0 %>)
+                    <a href="<%= dashboardFilterUrl('active') %>"
+                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= currentFilter === 'active' ? 'bg-emerald-600 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
+                        data-status="active" <%= currentFilter === 'active' ? 'aria-current="page"' : '' %>>
+                        Active (<%= typeof activeCount !== 'undefined' ? activeCount : 0 %>)
                     </a>
-                    <a href="/company/dashboard?status=paused<%= (typeof currentSort !== 'undefined' && currentSort !== 'newest') ? '&sort=' + currentSort : '' %>"
-                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= (typeof currentFilter !== 'undefined' && currentFilter === 'paused') ? 'bg-amber-600 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
-                        data-status="paused">
-                        Paused (<%= typeof pausedCount !== 'undefined' ? pausedCount : 0 %>)
+                    <a href="<%= dashboardFilterUrl('closed') %>"
+                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= currentFilter === 'closed' ? 'bg-amber-600 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
+                        data-status="closed" <%= currentFilter === 'closed' ? 'aria-current="page"' : '' %>>
+                        Closed (<%= typeof closedCount !== 'undefined' ? closedCount : 0 %>)
                     </a>
-                    <a href="/company/dashboard?status=draft<%= (typeof currentSort !== 'undefined' && currentSort !== 'newest') ? '&sort=' + currentSort : '' %>"
-                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= (typeof currentFilter !== 'undefined' && currentFilter === 'draft') ? 'bg-slate-700 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
-                        data-status="draft">
+                    <a href="<%= dashboardFilterUrl('draft') %>"
+                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= currentFilter === 'draft' ? 'bg-slate-700 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
+                        data-status="draft" <%= currentFilter === 'draft' ? 'aria-current="page"' : '' %>>
                         Drafts (<%= typeof draftCount !== 'undefined' ? draftCount : 0 %>)
+                    </a>
+                    <a href="<%= dashboardFilterUrl('expired') %>"
+                        class="status-filter-tab px-3 py-1.5 rounded-lg transition-colors <%= currentFilter === 'expired' ? 'bg-rose-600 text-white font-semibold shadow-xs' : 'text-slate-600 hover:bg-slate-100' %>"
+                        data-status="expired" <%= currentFilter === 'expired' ? 'aria-current="page"' : '' %>>
+                        Expired (<%= typeof expiredCount !== 'undefined' ? expiredCount : 0 %>)
                     </a>
                 </div>
 
@@ -177,9 +183,11 @@
                     <select id="sortInternships"
                         aria-label="Sort internships"
                         class="sr-only"
-                        tabindex="-1">
+                        tabindex="-1"
+                        data-status="<%= currentFilter %>">
                         <option value="newest" <%= (typeof currentSort === 'undefined' || currentSort === 'newest') ? 'selected' : '' %>>Newest</option>
                         <option value="oldest" <%= (typeof currentSort !== 'undefined' && currentSort === 'oldest') ? 'selected' : '' %>>Oldest</option>
+                        <option value="title" <%= currentSort === 'title' ? 'selected' : '' %>>Title (A-Z)</option>
                         <option value="most_applications" <%= (typeof currentSort !== 'undefined' && (currentSort === 'most_applications' || currentSort === 'applications' || currentSort === 'applications_desc')) ? 'selected' : '' %>>Most Applications</option>
                         <option value="deadline" <%= (typeof currentSort !== 'undefined' && (currentSort === 'deadline' || currentSort === 'deadline_soonest' || currentSort === 'deadline_asc')) ? 'selected' : '' %>>Application Deadline (soonest first)</option>
                     </select>
@@ -193,7 +201,9 @@
                         <span class="flex items-center gap-2 truncate">
                             <i class="ph-bold ph-arrows-down-up text-indigo-600 text-sm"></i>
                             <span id="sortDropdownLabel" class="truncate">
-                                <% if (typeof currentSort !== 'undefined' && currentSort === 'oldest') { %>
+                                <% if (currentSort === 'title') { %>
+                                    Title (A-Z)
+                                <% } else if (typeof currentSort !== 'undefined' && currentSort === 'oldest') { %>
                                     Oldest
                                 <% } else if (typeof currentSort !== 'undefined' && (currentSort === 'most_applications' || currentSort === 'applications' || currentSort === 'applications_desc')) { %>
                                     Most Applications
@@ -224,6 +234,17 @@
                                 <span>Newest</span>
                             </span>
                             <i class="ph-bold ph-check text-indigo-600 text-sm <%= (typeof currentSort === 'undefined' || currentSort === 'newest') ? '' : 'hidden' %>"></i>
+                        </button>
+
+                        <button type="button"
+                            role="option"
+                            data-value="title"
+                            class="sort-option-item w-full flex items-center justify-between gap-2 px-3 py-2 text-xs rounded-lg transition-colors cursor-pointer text-left <%= currentSort === 'title' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900 font-medium' %>">
+                            <span class="flex items-center gap-2.5">
+                                <i class="ph-bold ph-text-aa text-sm <%= currentSort === 'title' ? 'text-indigo-600' : 'text-slate-400' %>"></i>
+                                <span>Title (A-Z)</span>
+                            </span>
+                            <i class="ph-bold ph-check text-indigo-600 text-sm <%= currentSort === 'title' ? '' : 'hidden' %>"></i>
                         </button>
 
                         <button type="button"
@@ -412,16 +433,29 @@
                 </div>
             <% } else { %>
                 <div class="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-sm">
-                    <% if (typeof currentFilter !== 'undefined' && currentFilter === 'draft') { %>
-                        No saved drafts. Use the "Save as Draft" button on the left to save incomplete listings!
-                    <% } else if (typeof currentFilter !== 'undefined' && currentFilter === 'paused') { %>
-                        No paused listings. You can pause any published internship to temporarily stop receiving new applications while reviewing candidates.
-                    <% } else if (typeof currentFilter !== 'undefined' && currentFilter === 'published') { %>
-                        No published opportunities yet. Publish your first role using the form on the left!
-                    <% } else { %>
-                        No internships posted yet. Use the form on the left to publish or save your first role!
-                    <% } %>
+                    <% const emptyStateMessages = {
+                        all: 'No internships posted yet.',
+                        active: 'No active listings found.',
+                        closed: 'No closed listings found.',
+                        draft: 'No draft listings found.',
+                        expired: 'No expired listings found.'
+                    }; %>
+                    <%= emptyStateMessages[currentFilter] || emptyStateMessages.all %>
                 </div>
+            <% } %>
+
+            <% if (typeof pageCount !== 'undefined' && pageCount > 1) { %>
+                <nav aria-label="Internship listing pages" class="flex items-center justify-between border-t border-slate-200 pt-4 text-sm">
+                    <span class="text-slate-500">Page <%= currentPage %> of <%= pageCount %></span>
+                    <div class="flex items-center gap-2">
+                        <% if (previousPageUrl) { %>
+                            <a href="<%= previousPageUrl %>" rel="prev" class="rounded-lg border border-slate-200 px-3 py-2 font-medium text-slate-700 transition-colors hover:bg-slate-50">Previous</a>
+                        <% } %>
+                        <% if (nextPageUrl) { %>
+                            <a href="<%= nextPageUrl %>" rel="next" class="rounded-lg border border-slate-200 px-3 py-2 font-medium text-slate-700 transition-colors hover:bg-slate-50">Next</a>
+                        <% } %>
+                    </div>
+                </nav>
             <% } %>
         </div>
 
@@ -438,12 +472,9 @@
         const optionLabels = {
             'newest': 'Newest',
             'oldest': 'Oldest',
+            'title': 'Title (A-Z)',
             'most_applications': 'Most Applications',
-            'applications': 'Most Applications',
-            'applications_desc': 'Most Applications',
-            'deadline': 'Application Deadline (soonest first)',
-            'deadline_soonest': 'Application Deadline (soonest first)',
-            'deadline_asc': 'Application Deadline (soonest first)'
+            'deadline': 'Application Deadline (soonest first)'
         };
 
         function updateCustomDropdownUI(sortValue) {
@@ -452,10 +483,7 @@
             }
 
             sortOptionItems.forEach(item => {
-                const val = item.dataset.value;
-                const isSelected = (val === sortValue) ||
-                    (val === 'most_applications' && (sortValue === 'applications' || sortValue === 'applications_desc')) ||
-                    (val === 'deadline' && (sortValue === 'deadline_soonest' || sortValue === 'deadline_asc'));
+                const isSelected = item.dataset.value === sortValue;
 
                 const icon = item.querySelector('.ph-bold:first-child');
                 const check = item.querySelector('.ph-check');
@@ -511,96 +539,23 @@
 
         sortOptionItems.forEach(item => {
             item.addEventListener('click', () => {
-                const sort = item.dataset.value;
                 if (sortInternships) {
-                    sortInternships.value = sort;
+                    sortInternships.value = item.dataset.value;
                     sortInternships.dispatchEvent(new Event('change'));
-                } else {
-                    sortCards(sort);
-                    updateCustomDropdownUI(sort);
                 }
                 toggleDropdown(false);
             });
         });
 
-        function sortCards(sort) {
-            const container = document.getElementById('internshipsContainer');
-            if (!container) return;
-
-            const cards = Array.from(container.querySelectorAll('.internship-card'));
-            if (!cards.length) return;
-
-            cards.sort((a, b) => {
-                if (sort === 'oldest') {
-                    const timeDiff = Number(a.dataset.posted) - Number(b.dataset.posted);
-                    if (timeDiff !== 0) return timeDiff;
-                    return (a.dataset.id || '').localeCompare(b.dataset.id || '');
-                }
-
-                if (sort === 'most_applications' || sort === 'applications' || sort === 'applications_desc') {
-                    const countDiff = Number(b.dataset.applications || 0) - Number(a.dataset.applications || 0);
-                    if (countDiff !== 0) return countDiff;
-                    const timeDiff = Number(b.dataset.posted) - Number(a.dataset.posted);
-                    if (timeDiff !== 0) return timeDiff;
-                    return (b.dataset.id || '').localeCompare(a.dataset.id || '');
-                }
-
-                if (sort === 'deadline' || sort === 'deadline_soonest' || sort === 'deadline_asc') {
-                    const deadlineA = a.dataset.deadline ? Number(a.dataset.deadline) : Infinity;
-                    const deadlineB = b.dataset.deadline ? Number(b.dataset.deadline) : Infinity;
-                    if (deadlineA !== deadlineB) return deadlineA - deadlineB;
-                    const timeDiff = Number(b.dataset.posted) - Number(a.dataset.posted);
-                    if (timeDiff !== 0) return timeDiff;
-                    return (b.dataset.id || '').localeCompare(a.dataset.id || '');
-                }
-
-                // Default: newest
-                const timeDiff = Number(b.dataset.posted) - Number(a.dataset.posted);
-                if (timeDiff !== 0) return timeDiff;
-                return (b.dataset.id || '').localeCompare(a.dataset.id || '');
-            });
-
-            cards.forEach(card => container.appendChild(card));
-        }
-
         if (sortInternships) {
-            const currentSort = new URLSearchParams(window.location.search).get('sort') || sortInternships.value || 'newest';
-            sortInternships.value = currentSort;
-            updateCustomDropdownUI(currentSort);
+            updateCustomDropdownUI(sortInternships.value || 'newest');
 
             sortInternships.addEventListener('change', () => {
-                const sort = sortInternships.value;
-                sortCards(sort);
-                updateCustomDropdownUI(sort);
-
                 const url = new URL(window.location.href);
-                url.searchParams.set('sort', sort);
-                window.history.pushState({}, '', url);
-
-                document.querySelectorAll('.status-filter-tab').forEach(tab => {
-                    const tabUrl = new URL(tab.href, window.location.origin);
-                    tabUrl.searchParams.set('sort', sort);
-                    tab.href = tabUrl.pathname + tabUrl.search;
-                });
+                url.searchParams.set('status', sortInternships.dataset.status || 'all');
+                url.searchParams.set('sort', sortInternships.value);
+                url.searchParams.delete('page');
+                window.location.assign(url.toString());
             });
-
-            window.addEventListener('popstate', () => {
-                const urlSort = new URLSearchParams(window.location.search).get('sort') || 'newest';
-                if (sortInternships) {
-                    sortInternships.value = urlSort;
-                }
-                sortCards(urlSort);
-                updateCustomDropdownUI(urlSort);
-
-                document.querySelectorAll('.status-filter-tab').forEach(tab => {
-                    const tabUrl = new URL(tab.href, window.location.origin);
-                    tabUrl.searchParams.set('sort', urlSort);
-                    tab.href = tabUrl.pathname + tabUrl.search;
-                });
-            });
-
-            if (currentSort && currentSort !== 'newest') {
-                sortCards(currentSort);
-            }
         }
     </script>

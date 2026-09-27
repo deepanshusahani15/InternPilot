@@ -31,6 +31,12 @@ const {
 const chatRouter = require('./chat');
 const { logRecruiterActivity } = require('../utils/activityLogger');
 const { buildRecruiterOverview } = require('../utils/dashboardStats');
+const {
+    companyDashboardStatusQuery,
+    normalizeDashboardSort,
+    normalizeDashboardStatus,
+    sortCompanyDashboardInternships
+} = require('../utils/companyDashboardFilters');
 const { calculateCandidateMatch } = require('../utils/candidateMatcher');
 const { buildSkillProfiles } = require('../utils/skillProfiles');
 const { ApplicationKitValidationError, parseApplicationQuestions } = require('../utils/applicationKit');
@@ -375,25 +381,29 @@ router.get(['/company/:id/profile', '/company/profile/:id'], async (req, res) =>
 
 router.get('/company/dashboard', isAuthenticated, requireCompanyPermission('dashboard:view'), async (req, res) => {
     try {
-        const currentFilter = req.query.status || 'all'; // 'all', 'published', 'paused', 'draft'
-        const currentSort = req.query.sort || 'newest';
-        const allInternships = await Internship.find(companyInternshipQuery(req.company)).sort({ _id: -1 });
+        const currentFilter = normalizeDashboardStatus(req.query.status);
+        const currentSort = normalizeDashboardSort(req.query.sort);
+        const now = new Date();
+        const pageSize = 12;
+        const requestedPage = Number.parseInt(String(req.query.page || '1'), 10);
+        const safePage = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+        const companyQuery = companyInternshipQuery(req.company);
+        const countForStatus = status => Internship.countDocuments({
+            $and: [companyQuery, companyDashboardStatusQuery(status, now)]
+        });
 
-        const publishedCount = allInternships.filter(i => (i.status === 'published' || (!i.status && !i.isPaused)) && !i.isPaused && i.status !== 'paused').length;
-        const pausedCount = allInternships.filter(i => i.status === 'paused' || i.isPaused).length;
-        const draftCount = allInternships.filter(i => i.status === 'draft').length;
-        const totalCount = allInternships.length;
+        const [allInternshipIds, activeCount, closedCount, draftCount, expiredCount, filteredInternships] = await Promise.all([
+            Internship.distinct('_id', companyQuery),
+            countForStatus('active'),
+            countForStatus('closed'),
+            countForStatus('draft'),
+            countForStatus('expired'),
+            Internship.find({
+                $and: [companyQuery, companyDashboardStatusQuery(currentFilter, now)]
+            }).sort({ _id: -1 })
+        ]);
+        const totalCount = allInternshipIds.length;
 
-        let filteredInternships = allInternships;
-        if (currentFilter === 'published') {
-            filteredInternships = allInternships.filter(i => (i.status === 'published' || (!i.status && !i.isPaused)) && !i.isPaused && i.status !== 'paused');
-        } else if (currentFilter === 'paused') {
-            filteredInternships = allInternships.filter(i => i.status === 'paused' || i.isPaused);
-        } else if (currentFilter === 'draft') {
-            filteredInternships = allInternships.filter(i => i.status === 'draft');
-        }
-
-        const allInternshipIds = allInternships.map(i => i._id);
         const [totalApplicationsCount, applicationCounts] = await Promise.all([
             Application.countDocuments({ internship: { $in: allInternshipIds } }),
             Application.aggregate([
@@ -407,51 +417,35 @@ router.get('/company/dashboard', isAuthenticated, requireCompanyPermission('dash
             appCountMap[item._id.toString()] = item.count;
         });
 
-        if (currentSort === 'oldest') {
-            filteredInternships.sort((a, b) => {
-                const timeDiff = a._id.getTimestamp() - b._id.getTimestamp();
-                if (timeDiff !== 0) return timeDiff;
-                return a._id.toString().localeCompare(b._id.toString());
-            });
-        } else if (currentSort === 'most_applications' || currentSort === 'applications' || currentSort === 'applications_desc') {
-            filteredInternships.sort((a, b) => {
-                const countA = appCountMap[a._id.toString()] || 0;
-                const countB = appCountMap[b._id.toString()] || 0;
-                if (countB !== countA) return countB - countA;
-                const timeDiff = b._id.getTimestamp() - a._id.getTimestamp();
-                if (timeDiff !== 0) return timeDiff;
-                return b._id.toString().localeCompare(a._id.toString());
-            });
-        } else if (currentSort === 'deadline' || currentSort === 'deadline_soonest' || currentSort === 'deadline_asc') {
-            filteredInternships.sort((a, b) => {
-                const deadlineA = a.applicationDeadline ? new Date(a.applicationDeadline).getTime() : Infinity;
-                const deadlineB = b.applicationDeadline ? new Date(b.applicationDeadline).getTime() : Infinity;
-                if (deadlineA !== deadlineB) return deadlineA - deadlineB;
-                const timeDiff = b._id.getTimestamp() - a._id.getTimestamp();
-                if (timeDiff !== 0) return timeDiff;
-                return b._id.toString().localeCompare(a._id.toString());
-            });
-        } else {
-            // Default: newest
-            filteredInternships.sort((a, b) => {
-                const timeDiff = b._id.getTimestamp() - a._id.getTimestamp();
-                if (timeDiff !== 0) return timeDiff;
-                return b._id.toString().localeCompare(a._id.toString());
-            });
-        }
+        const sortedInternships = sortCompanyDashboardInternships(filteredInternships, currentSort, appCountMap);
+
+        const pageCount = Math.ceil(sortedInternships.length / pageSize);
+        const currentPage = Math.min(safePage, Math.max(pageCount, 1));
+        const startIndex = (currentPage - 1) * pageSize;
+        const paginatedInternships = sortedInternships.slice(startIndex, startIndex + pageSize);
+        const pageUrl = page => {
+            const query = new URLSearchParams({ status: currentFilter, sort: currentSort });
+            if (page > 1) query.set('page', String(page));
+            return `/company/dashboard?${query.toString()}`;
+        };
 
         const overview = await buildRecruiterOverview(req.company._id);
 
         res.render('company/company-dashboard', {
             user: req.user,
-            internships: filteredInternships,
+            internships: paginatedInternships,
             totalApplicationsCount,
-            publishedCount,
-            pausedCount,
+            activeCount,
+            closedCount,
             draftCount,
+            expiredCount,
             totalCount,
             currentFilter,
             currentSort,
+            currentPage,
+            pageCount,
+            previousPageUrl: currentPage > 1 ? pageUrl(currentPage - 1) : null,
+            nextPageUrl: currentPage < pageCount ? pageUrl(currentPage + 1) : null,
             appCountMap,
             overview,
             permissions: req.companyPermissions
