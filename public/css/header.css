@@ -16,3 +16,13 @@
     outline: 2px solid #4f46e5;
     outline-offset: 2px;
 }
+
+/* Long candidate/company menus remain inside the viewport on tablet and
+ * laptop widths, so sign-in and sign-out actions never sit off-screen. */
+@media (max-width: 1535px) {
+    #mobileNavigation {
+        max-height: calc(100dvh - 5.25rem);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+}

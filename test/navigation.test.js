@@ -108,5 +108,16 @@ test('header groups quick action controls with consistent spacing and clear visu
     assert.match(html, /href="\/candidate\/saved-internships"/);
     assert.match(html, /href="\/candidate\/saved-searches"/);
     assert.match(html, /href="\/notifications"/);
-    assert.match(html, /class="[^"]*gap-1 sm:gap-1\.5[^"]*"/);
+    assert.match(html, /class="[^"]*hidden items-center gap-1 sm:flex sm:gap-1\.5[^"]*"/);
+});
+
+test('header keeps account actions in the compact menu below the full-navigation breakpoint', () => {
+    const signedOut = renderHeader('/');
+    const signedIn = renderHeader('/', { _id: 'candidate-id', name: 'Candidate', role: 'candidate' });
+
+    assert.match(headerTemplate, /2xl:flex/);
+    assert.match(headerTemplate, /2xl:hidden/);
+    assert.match(signedOut, /href="\/auth\/login"/);
+    assert.match(signedOut, /href="\/auth\/register"/);
+    assert.match(signedIn, /href="\/auth\/logout"/);
 });
