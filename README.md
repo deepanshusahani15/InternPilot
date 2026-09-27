@@ -277,6 +277,12 @@ EMAIL_PASS=your_gmail_app_password
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_CALLBACK_URL=http://localhost:8080/auth/google/callback
+
+# OTP abuse protection (optional values shown are the secure defaults)
+# A code allows at most five failed verification attempts before it is
+# invalidated. Resends remain subject to the 60-second server cooldown.
+OTP_VERIFY_MAX_ATTEMPTS=5
+OTP_RESEND_MAX_PER_HOUR=3
 ```
 
 ---

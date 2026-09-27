@@ -154,6 +154,21 @@ const userSchema = new mongoose.Schema({
     otp: { type: String },
     otpExpires: { type: Date },
     lastOtpSentAt: { type: Date },
+    // OTP abuse controls are account-scoped so changing IPs does not reset
+    // resend or brute-force protection. Events retain no OTP value or IP.
+    otpVerificationAttempts: { type: Number, default: 0, min: 0 },
+    otpLastVerificationFailureAt: { type: Date },
+    otpResendWindowStartedAt: { type: Date },
+    otpResendCount: { type: Number, default: 0, min: 0 },
+    otpSecurityEvents: [{
+        _id: false,
+        type: {
+            type: String,
+            enum: ['otp_resent', 'otp_verification_failed', 'otp_invalidated_after_failures', 'otp_resend_rate_limited', 'otp_verified'],
+            required: true
+        },
+        at: { type: Date, required: true, default: Date.now }
+    }],
 
     createdAt: { type: Date, default: Date.now }
 }, { toJSON: { virtuals: true }, toObject: { virtuals: true } });

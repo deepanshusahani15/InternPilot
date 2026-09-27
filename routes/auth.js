@@ -4,6 +4,21 @@ const passport = require('passport');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { sendOTPEmail } = require('../utils/sendEmail');
+const {
+    GENERIC_RESEND_MESSAGE,
+    GENERIC_VERIFICATION_ERROR,
+    otpSecurityConfig,
+    normalizeEmail,
+    normalizeOtp,
+    freshOtpState,
+    resendEligibilityQuery,
+    resendOtpUpdate,
+    activeOtpSuccessQuery,
+    activeOtpFailureQuery,
+    failedVerificationUpdate,
+    successfulOtpVerificationUpdate,
+    resendRateLimitAuditUpdate
+} = require('../utils/otpSecurity');
 
 const generateSecureOTP = () => {
     return crypto.randomInt(100000, 1000000).toString();
@@ -22,9 +37,12 @@ router.get('/login', redirectIfAuthenticated, (req, res) => res.render('auth/log
 router.get('/register', redirectIfAuthenticated, (req, res) => res.render('auth/register'));
 
 router.post('/register', async (req, res) => {
-    const { name, email, password, role, adminSecretKey, companyName, cin, industry } = req.body;
-    const normalizedEmail = (email || '').trim().toLowerCase();
-    const trimmedName = (name || '').trim();
+    const { name, email, password, role, adminSecretKey, companyName, cin, industry } = req.body || {};
+    const normalizedEmail = normalizeEmail(email);
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
+    const trimmedCompanyName = typeof companyName === 'string' ? companyName.trim() : '';
+    const trimmedCin = typeof cin === 'string' ? cin.trim() : '';
+    const trimmedIndustry = typeof industry === 'string' ? industry.trim() : '';
 
     console.log('\n--- New Registration Request ---');
     console.log('Received Payload Email:', normalizedEmail);
@@ -62,7 +80,7 @@ router.post('/register', async (req, res) => {
             }
             selectedRole = 'admin';
         } else if (role === 'company') {
-            if (!companyName || !companyName.trim()) {
+            if (!trimmedCompanyName) {
                 req.flash('error_msg', 'Company name is required for company registration.');
                 return res.redirect('/auth/register');
             }
@@ -95,15 +113,13 @@ router.post('/register', async (req, res) => {
                 existing.name = trimmedName;
                 existing.role = selectedRole;
                 existing.password = password;
-                existing.otp = otp;
-                existing.otpExpires = new Date(now + 10 * 60 * 1000);
-                existing.lastOtpSentAt = new Date(now);
+                Object.assign(existing, freshOtpState(otp, new Date(now), otpSecurityConfig()));
 
                 if (selectedRole === 'company') {
                     existing.companyDetails = {
-                        companyName: companyName.trim(),
-                        cin: cin || '',
-                        industry: industry || '',
+                        companyName: trimmedCompanyName,
+                        cin: trimmedCin,
+                        industry: trimmedIndustry,
                         isVerified: false,
                         verificationStatus: 'pending',
                         verificationSubmittedAt: new Date(),
@@ -132,8 +148,7 @@ router.post('/register', async (req, res) => {
         }
 
         const otp = generateSecureOTP();
-        const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-        const lastOtpSentAt = new Date();
+        const otpState = freshOtpState(otp, new Date(), otpSecurityConfig());
 
         const userData = {
             name: trimmedName,
@@ -141,16 +156,14 @@ router.post('/register', async (req, res) => {
             password,
             role: selectedRole,
             isEmailVerified: false,
-            otp,
-            otpExpires,
-            lastOtpSentAt
+            ...otpState
         };
 
         if (userData.role === 'company') {
             userData.companyDetails = {
-                companyName: companyName.trim(),
-                cin: cin || '',
-                industry: industry || '',
+                companyName: trimmedCompanyName,
+                cin: trimmedCin,
+                industry: trimmedIndustry,
                 isVerified: false,
                 verificationStatus: 'pending',
                 verificationSubmittedAt: new Date(),
@@ -193,118 +206,100 @@ router.post('/register', async (req, res) => {
 });
 
 router.get('/verify-otp', (req, res) => {
-    const email = (req.query.email || '').trim().toLowerCase();
+    const email = normalizeEmail(req.query.email);
     res.render('extras/verify-otp', { email });
 });
 
 router.post('/verify-otp', async (req, res) => {
-    const email = (req.body.email || '').trim().toLowerCase();
-    const otp = (req.body.otp || '').trim();
+    const email = normalizeEmail(req.body?.email);
+    const otp = normalizeOtp(req.body?.otp);
+    const redirectPath = `/auth/verify-otp?email=${encodeURIComponent(email)}`;
 
     try {
         if (!email || !otp) {
-            req.flash('error_msg', 'Email and verification code are required.');
-            return res.redirect(`/auth/verify-otp?email=${encodeURIComponent(email)}`);
+            req.flash('error_msg', GENERIC_VERIFICATION_ERROR);
+            return res.redirect(redirectPath);
         }
 
-        console.log(`Verifying OTP for ${email}...`);
-        const user = await User.findOne({ email });
+        const now = new Date();
+        const config = otpSecurityConfig();
+        // This conditional update makes a valid code single-use even if two
+        // requests race, and refuses a code once its bad-attempt ceiling is hit.
+        const verifiedUser = await User.findOneAndUpdate(
+            activeOtpSuccessQuery(email, otp, now, config),
+            successfulOtpVerificationUpdate(now),
+            { new: true }
+        );
 
-        if (!user) {
-            req.flash('error_msg', 'No account found for this email address. Please register.');
-            return res.redirect('/auth/register');
+        if (!verifiedUser) {
+            // Only an active account with a different code is updated. The
+            // response remains identical for unknown emails, expired codes,
+            // and locked OTPs, preventing account enumeration.
+            await User.findOneAndUpdate(
+                activeOtpFailureQuery(email, otp, now, config),
+                failedVerificationUpdate(now, config),
+                { new: true }
+            );
+            req.flash('error_msg', GENERIC_VERIFICATION_ERROR);
+            return res.redirect(redirectPath);
         }
-
-        if (user.isEmailVerified) {
-            req.flash('success_msg', 'Account is already verified. Please log in.');
-            return res.redirect('/auth/login');
-        }
-
-        const isExpired = !user.otpExpires || new Date(user.otpExpires).getTime() < Date.now();
-        if (!user.otp || user.otp !== otp || isExpired) {
-            req.flash('error_msg', 'Invalid or expired OTP code.');
-            return res.redirect(`/auth/verify-otp?email=${encodeURIComponent(email)}`);
-        }
-
-        user.isEmailVerified = true;
-        user.otp = undefined;
-        user.otpExpires = undefined;
-        user.lastOtpSentAt = undefined;
-        await user.save();
 
         console.log(`User ${email} verified successfully.`);
         req.flash('success_msg', 'Account verified successfully! You can now log in.');
         res.redirect('/auth/login');
     } catch (err) {
         console.error('Verification error:', err);
-        req.flash('error_msg', 'Something went wrong during verification.');
-        res.redirect('/auth/login');
+        req.flash('error_msg', GENERIC_VERIFICATION_ERROR);
+        res.redirect(redirectPath);
     }
 });
 
 router.post('/resend-otp', async (req, res) => {
-    const email = (req.body.email || '').trim().toLowerCase();
+    const email = normalizeEmail(req.body?.email);
+    const redirectPath = `/auth/verify-otp?email=${encodeURIComponent(email)}`;
 
     try {
         if (!email) {
-            req.flash('error_msg', 'Email address is required to resend OTP.');
-            return res.redirect('/auth/register');
+            req.flash('success_msg', GENERIC_RESEND_MESSAGE);
+            return res.redirect(redirectPath);
         }
 
-        const COOLDOWN_SECONDS = 60;
-        const now = Date.now();
+        const now = new Date();
+        const config = otpSecurityConfig();
         const otp = generateSecureOTP();
-        const otpExpires = now + 10 * 60 * 1000;
-        const cooldownThreshold = new Date(now - COOLDOWN_SECONDS * 1000);
 
-        // Atomically reserve the resend cooldown to prevent concurrent request race conditions
+        // Atomically reserve both the cooldown and hourly account quota before
+        // dispatching email. This prevents concurrent requests from bypassing
+        // either limit.
         const updatedUser = await User.findOneAndUpdate(
-            {
-                email,
-                isEmailVerified: false,
-                $or: [
-                    { lastOtpSentAt: { $exists: false } },
-                    { lastOtpSentAt: null },
-                    { lastOtpSentAt: { $lte: cooldownThreshold } }
-                ]
-            },
-            {
-                $set: {
-                    otp,
-                    otpExpires,
-                    lastOtpSentAt: now
-                }
-            },
+            resendEligibilityQuery(email, now, config),
+            resendOtpUpdate(otp, now, config),
             { new: true }
         );
 
         if (!updatedUser) {
-            const user = await User.findOne({ email });
-
-            if (!user) {
-                req.flash('error_msg', 'User not found. Please register first.');
-                return res.redirect('/auth/register');
-            }
-
-            if (user.isEmailVerified) {
-                req.flash('error_msg', 'Account is already verified. Please log in.');
-                return res.redirect('/auth/login');
-            }
-
-            const elapsedSeconds = Math.floor((now - new Date(user.lastOtpSentAt).getTime()) / 1000);
-            const remainingSeconds = Math.max(1, COOLDOWN_SECONDS - elapsedSeconds);
-            req.flash('error_msg', `Please wait ${remainingSeconds}s before requesting a new code.`);
-            return res.redirect(`/auth/verify-otp?email=${encodeURIComponent(email)}`);
+            // Record the pattern for an existing unverified account without
+            // exposing whether this email exists to the requester.
+            await User.updateOne(
+                { email, isEmailVerified: false },
+                resendRateLimitAuditUpdate(now)
+            );
+            req.flash('success_msg', GENERIC_RESEND_MESSAGE);
+            return res.redirect(redirectPath);
         }
 
-        await sendOTPEmail(email, otp);
+        try {
+            await sendOTPEmail(email, otp);
+        } catch (emailError) {
+            console.error('Resend OTP delivery failed:', emailError);
+        }
 
-        req.flash('success_msg', 'A new verification code has been sent to your email.');
-        res.redirect(`/auth/verify-otp?email=${encodeURIComponent(email)}`);
+        req.flash('success_msg', GENERIC_RESEND_MESSAGE);
+        res.redirect(redirectPath);
     } catch (err) {
         console.error('Resend OTP error:', err);
-        req.flash('error_msg', "We couldn't send your code. Please try again in a moment.");
-        res.redirect(`/auth/verify-otp?email=${encodeURIComponent(email)}`);
+        req.flash('success_msg', GENERIC_RESEND_MESSAGE);
+        res.redirect(redirectPath);
     }
 });
 
