@@ -263,13 +263,13 @@
             </a>
         </div>
     <% } else { %>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-animate-stagger>
         <% internships.forEach(item => { %>
             <% const isItemPaused = item.status === 'paused' || item.isPaused; %>
             <% const isOwnedByCurrentCompany = currentUserCompanyId && item.companyId && item.companyId.toString() === currentUserCompanyId.toString(); %>
             <% const canEditItem = isOwnedByCurrentCompany && currentUser && ['company', 'recruiter'].includes(currentUser.role); %>
             <% const canDeleteItem = isOwnedByCurrentCompany && currentUser && currentUser.role === 'company'; %>
-            <div
+            <div data-tilt
                 class="internship-card bg-white border <%= isItemPaused ? 'border-amber-300' : 'border-slate-200' %> rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between relative group"
                 data-stipend="<%= item.monthlyStipend || 5000 %>"
                 data-duration="<%= parseInt(item.duration) || 12 %>"
@@ -431,7 +431,7 @@
                                 <i class="ph-bold ph-briefcase"></i> <%= requiresApplicationKit ? 'Prepare Application Kit' : 'Tailor Application' %>
                             </a>
                             <% if (!requiresApplicationKit) { %>
-                                <form action="/internships/<%= item._id %>/apply" method="POST" class="w-full">
+                                <form action="/internships/<%= item._id %>/apply" method="POST" class="w-full" data-quick-apply-form data-no-loading data-internship-title="<%= item.title %>" data-company-name="<%= item.companyName || item.company || '' %>">
                                     <button type="submit"
                                         class="mt-2 w-full text-center py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1.5">
                                         <i class="ph-bold ph-paper-plane-tilt"></i> Quick Apply

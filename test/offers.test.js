@@ -177,14 +177,15 @@ test('concurrent accepts for a one-seat listing cannot overbook', async () => {
     const firstOffer = offerRecord({ internship: InternshipModel.listing._id });
     const secondOffer = offerRecord({ internship: InternshipModel.listing._id });
     const OfferModel = offerModelFor([firstOffer, secondOffer]);
+    const CandidateVerificationModel = { async findOne() { return { status: 'approved' }; } };
     const ApplicationModel = applicationModelFor([
         { _id: firstOffer.application, candidate: firstOffer.candidate, internship: firstOffer.internship, status: 'Interview', statusHistory: [] },
         { _id: secondOffer.application, candidate: secondOffer.candidate, internship: secondOffer.internship, status: 'Shortlisted', statusHistory: [] }
     ]);
 
     const outcomes = await Promise.allSettled([
-        acceptOffer({ offerId: firstOffer._id, candidateId: firstOffer.candidate, now, OfferModel, ApplicationModel, InternshipModel }),
-        acceptOffer({ offerId: secondOffer._id, candidateId: secondOffer.candidate, now, OfferModel, ApplicationModel, InternshipModel })
+        acceptOffer({ offerId: firstOffer._id, candidateId: firstOffer.candidate, now, OfferModel, ApplicationModel, InternshipModel, CandidateVerificationModel }),
+        acceptOffer({ offerId: secondOffer._id, candidateId: secondOffer.candidate, now, OfferModel, ApplicationModel, InternshipModel, CandidateVerificationModel })
     ]);
 
     assert.equal(outcomes.filter(result => result.status === 'fulfilled').length, 1);

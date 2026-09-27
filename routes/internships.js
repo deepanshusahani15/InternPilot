@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const CandidateVerification = require('../models/CandidateVerification');
 const Internship = require('../models/Internship');
 const Application = require('../models/Application');
 const { notifyNewApplication, checkAndNotifyHighVolume } = require('../utils/recruiterNotifications');
@@ -40,6 +41,7 @@ const {
     buildApplicationKit,
     hasApplicationQuestions
 } = require('../utils/applicationKit');
+const { CandidateVerificationError, assertCandidateVerified } = require('../utils/candidateVerification');
 
 function applicationResponseWantsJson(req) {
     return Boolean(req.xhr || req.is('json') || req.headers.accept?.includes('application/json'));
@@ -65,6 +67,15 @@ function applicationAvailabilityError(internship) {
 
 function duplicateApplicationError(error) {
     return error && (error.code === 11000 || error.code === 'DUPLICATE_APPLICATION');
+}
+
+function applicationErrorMessage(error, fallback) {
+    if (error instanceof ApplicationKitValidationError
+        || error instanceof CandidateVerificationError
+        || duplicateApplicationError(error)) {
+        return error.message;
+    }
+    return fallback;
 }
 
 async function createCandidateApplication({ candidate, internship, applicationKit }) {
@@ -460,6 +471,7 @@ router.get('/:id/application-kit', isAuthenticated, authorize('candidate'), asyn
             if (req.flash) req.flash('error_msg', unavailableMessage || 'Candidate profile not found.');
             return res.redirect(internship ? `/internships/${internship._id}` : '/internships');
         }
+        await assertCandidateVerified(candidate._id);
 
         const existing = await Application.findOne({ internship: internship._id, candidate: candidate._id }).select('_id');
         if (existing) {
@@ -476,7 +488,7 @@ router.get('/:id/application-kit', isAuthenticated, authorize('candidate'), asyn
         });
     } catch (error) {
         console.error('Error loading application kit:', error);
-        if (req.flash) req.flash('error_msg', 'Unable to prepare this application kit. Please try again.');
+        if (req.flash) req.flash('error_msg', applicationErrorMessage(error, 'Unable to prepare this application kit. Please try again.'));
         return res.redirect(`/internships/${req.params.id}`);
     }
 });
@@ -497,6 +509,7 @@ router.post('/:id/application-kit/preview', isAuthenticated, authorize('candidat
             if (req.flash) req.flash('error_msg', unavailableMessage || 'Candidate profile not found.');
             return res.redirect(internship ? `/internships/${internship._id}` : '/internships');
         }
+        await assertCandidateVerified(candidate._id);
 
         const existing = await Application.findOne({ internship: internship._id, candidate: candidate._id }).select('_id');
         if (existing) {
@@ -513,9 +526,7 @@ router.post('/:id/application-kit/preview', isAuthenticated, authorize('candidat
     } catch (error) {
         console.error('Error previewing application kit:', error);
         if (req.flash) {
-            req.flash('error_msg', error instanceof ApplicationKitValidationError
-                ? error.message
-                : 'Unable to preview this application kit. Please try again.');
+            req.flash('error_msg', applicationErrorMessage(error, 'Unable to preview this application kit. Please try again.'));
         }
         return res.redirect(`/internships/${req.params.id}/application-kit`);
     }
@@ -537,6 +548,7 @@ router.post('/:id/application-kit/submit', isAuthenticated, authorize('candidate
             if (req.flash) req.flash('error_msg', unavailableMessage || 'Candidate profile not found.');
             return res.redirect(internship ? `/internships/${internship._id}` : '/internships');
         }
+        await assertCandidateVerified(candidate._id);
 
         const applicationKit = buildApplicationKit({ candidate, internship, body: req.body });
         const application = await createCandidateApplication({ candidate, internship, applicationKit });
@@ -549,9 +561,7 @@ router.post('/:id/application-kit/submit', isAuthenticated, authorize('candidate
     } catch (error) {
         console.error('Error submitting application kit:', error);
         const status = error.statusCode || (duplicateApplicationError(error) ? 409 : 500);
-        const message = error instanceof ApplicationKitValidationError || duplicateApplicationError(error)
-            ? error.message
-            : 'Unable to submit this application. Please try again.';
+        const message = applicationErrorMessage(error, 'Unable to submit this application. Please try again.');
         if (applicationResponseWantsJson(req)) return res.status(status).json({ error: message });
         if (req.flash) req.flash('error_msg', message);
         return res.redirect(duplicateApplicationError(error)
@@ -582,6 +592,7 @@ router.post('/:id/apply', isAuthenticated, authorize('candidate'), async (req, r
             const referrer = req.get('Referrer');
             return res.redirect(referrer || (internship ? `/internships/${internship._id}` : '/internships'));
         }
+        await assertCandidateVerified(candidate._id);
 
         if (hasApplicationQuestions(internship)) {
             const message = 'This opportunity has application questions. Please complete your Application Kit before submitting.';
@@ -599,9 +610,7 @@ router.post('/:id/apply', isAuthenticated, authorize('candidate'), async (req, r
     } catch (error) {
         console.error('Error applying for internship:', error);
         const status = error.statusCode || (duplicateApplicationError(error) ? 409 : 500);
-        const message = duplicateApplicationError(error)
-            ? error.message
-            : 'Unable to submit this application. Please try again.';
+        const message = applicationErrorMessage(error, 'Unable to submit this application. Please try again.');
         if (applicationResponseWantsJson(req)) return res.status(status).json({ error: message });
         if (req.flash) req.flash('error_msg', message);
         return res.redirect(duplicateApplicationError(error) ? '/candidate/applications' : `/internships/${req.params.id}`);
@@ -772,6 +781,12 @@ router.get('/:id/applicants', isAuthenticated, requireCompanyPermission('applica
             .populate('notes.createdBy')
             .sort({ _id: -1 });
 
+        const candidateIds = applications.map(application => application.candidate?._id).filter(Boolean);
+        const verificationRows = candidateIds.length
+            ? await CandidateVerification.find({ candidate: { $in: candidateIds } }).select('candidate status').lean()
+            : [];
+        const verificationByCandidate = new Map(verificationRows.map(row => [String(row.candidate), row.status]));
+
         applications.forEach(application => {
             const match = calculateCandidateMatch(application.candidate, internship);
             application.matchScore = match.score;
@@ -779,6 +794,7 @@ router.get('/:id/applicants', isAuthenticated, requireCompanyPermission('applica
             application.matchingSkills = match.matchingSkills;
             application.matchingSkillProfiles = match.matchingSkillProfiles;
             application.candidateSkillProfiles = buildSkillProfiles(application.candidate);
+            application.candidateVerificationStatus = verificationByCandidate.get(String(application.candidate?._id)) || 'pending';
         });
         applications.sort((a, b) => b.matchScore - a.matchScore || b._id.getTimestamp() - a._id.getTimestamp());
 

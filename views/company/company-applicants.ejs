@@ -167,6 +167,14 @@
                                                         PMIS Eligible
                                                     </span>
                                                 <% } %>
+                                                <% const verificationStatus = app.candidateVerificationStatus || 'pending'; const verificationBadge = verificationStatus === 'approved'
+                                                    ? { label: 'Identity Verified', classes: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: 'ph-seal-check' }
+                                                    : verificationStatus === 'rejected'
+                                                        ? { label: 'Verification Rejected', classes: 'text-rose-700 bg-rose-50 border-rose-200', icon: 'ph-x-circle' }
+                                                        : verificationStatus === 'suspended'
+                                                            ? { label: 'Verification Suspended', classes: 'text-rose-800 bg-rose-100 border-rose-300', icon: 'ph-warning-octagon' }
+                                                            : { label: 'Verification Pending', classes: 'text-amber-800 bg-amber-50 border-amber-200', icon: 'ph-clock' }; %>
+                                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded border <%= verificationBadge.classes %>"><i class="ph-bold <%= verificationBadge.icon %>"></i> <%= verificationBadge.label %></span>
                                                 <% if (isTopRecommendation) { %>
                                                     <span class="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
                                                         <i class="ph-fill ph-star"></i> Top Match #<%= index + 1 %>

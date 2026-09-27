@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const CandidateVerification = require('../models/CandidateVerification');
 const Internship = require('../models/Internship');
 const Application = require('../models/Application');
 const Certificate = require('../models/Certificate');
@@ -573,6 +574,12 @@ router.get('/company/internships/:id/applicants', isAuthenticated, requireCompan
             .populate('notes.createdBy')
             .sort({ _id: -1 });
 
+        const candidateIds = applications.map(application => application.candidate?._id).filter(Boolean);
+        const verificationRows = candidateIds.length
+            ? await CandidateVerification.find({ candidate: { $in: candidateIds } }).select('candidate status').lean()
+            : [];
+        const verificationByCandidate = new Map(verificationRows.map(row => [String(row.candidate), row.status]));
+
         applications.forEach(application => {
             const match = calculateCandidateMatch(application.candidate, internship);
             application.matchScore = match.score;
@@ -580,6 +587,7 @@ router.get('/company/internships/:id/applicants', isAuthenticated, requireCompan
             application.matchingSkills = match.matchingSkills;
             application.matchingSkillProfiles = match.matchingSkillProfiles;
             application.candidateSkillProfiles = buildSkillProfiles(application.candidate);
+            application.candidateVerificationStatus = verificationByCandidate.get(String(application.candidate?._id)) || 'pending';
         });
         applications.sort((a, b) => b.matchScore - a.matchScore || b._id.getTimestamp() - a._id.getTimestamp());
 
@@ -769,7 +777,10 @@ router.post('/company/applications/:id/status', isAuthenticated, requireCompanyP
         const { status } = req.body;
         const applicationId = req.params.id;
 
-        const allowedStatuses = ['Submitted', 'Under Review', 'Shortlisted', 'Interview', 'Hired', 'Rejected'];
+        // Interview progression is handled by the interview scheduler and
+        // Hired is reserved for an accepted formal offer. Keeping them out of
+        // this generic endpoint prevents bypassing either lifecycle.
+        const allowedStatuses = ['Submitted', 'Under Review', 'Shortlisted', 'Rejected'];
         if (!status || !allowedStatuses.includes(status)) {
             if (req.flash) req.flash('error_msg', 'Invalid application status provided.');
             return res.redirect('/company/dashboard');
@@ -1364,6 +1375,9 @@ router.get('/company/applications/:id/candidate', isAuthenticated, requireCompan
         }
 
         const internship = application.internship;
+        const candidateVerification = await CandidateVerification.findOne({ candidate: application.candidate._id })
+            .select('status reviewedAt')
+            .lean();
 
         const certificate = await Certificate.findOne({
             application: application._id,
@@ -1377,7 +1391,8 @@ router.get('/company/applications/:id/candidate', isAuthenticated, requireCompan
             internship,
             certificate,
             permissions: req.companyPermissions,
-            skillProfiles: buildSkillProfiles(application.candidate)
+            skillProfiles: buildSkillProfiles(application.candidate),
+            candidateVerification
         });
     } catch (error) {
         console.error('Error loading candidate profile:', error);

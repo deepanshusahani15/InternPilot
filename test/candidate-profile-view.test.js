@@ -66,27 +66,28 @@ test('the profile route passes the reviewer permissions to the view', () => {
     assert.match(locals, /permissions:\s*req\.companyPermissions/);
 });
 
-test('reviewers get status dropdown with Interview and Hired options', () => {
+test('reviewers can progress an application through review without bypassing the interview or offer lifecycle', () => {
     const html = render({ permissions: ['applications:view', 'applications:review'] });
     assert.ok(html.includes(statusForm));
-    assert.match(html, /<option value="Interview"/);
-    assert.match(html, /<option value="Hired"/);
+    assert.match(html, /<option value="Shortlisted"/);
+    assert.match(html, /<option value="Rejected"/);
+    assert.doesNotMatch(html, /<option value="Interview"/);
+    assert.doesNotMatch(html, /<option value="Hired"/);
 });
 
-test('candidates in Interview status keep an active status dropdown for reviewers', () => {
+test('candidates in Interview status are read-only until the candidate accepts or declines a formal offer', () => {
     const interviewApp = { ...application, status: 'Interview' };
     const html = render({ application: interviewApp, permissions: ['applications:view', 'applications:review'] });
-    assert.ok(html.includes(`action="/company/applications/${interviewApp._id}/status"`));
-    assert.match(html, /<option value="Interview"\s+selected/);
-    assert.match(html, /<option value="Hired"/);
-    assert.match(html, /<option value="Rejected"/);
+    assert.ok(!html.includes(`action="/company/applications/${interviewApp._id}/status"`));
+    assert.match(html, /<span[^>]*>\s*Interview\s*<\/span>/);
 });
 
-test('the company status update route allows Interview and Hired', () => {
+test('the company status update route keeps Interview and Hired out of the generic transition endpoint', () => {
     const routes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'company.js'), 'utf8');
     const start = routes.indexOf("router.post('/company/applications/:id/status'");
     assert.notEqual(start, -1);
     const handler = routes.slice(start, routes.indexOf('});', start));
-    assert.match(handler, /allowedStatuses\s*=\s*\[[^\]]*'Interview'[^\]]*\]/);
-    assert.match(handler, /allowedStatuses\s*=\s*\[[^\]]*'Hired'[^\]]*\]/);
+    assert.match(handler, /allowedStatuses\s*=\s*\[[^\]]*'Shortlisted'[^\]]*\]/);
+    assert.doesNotMatch(handler, /allowedStatuses\s*=\s*\[[^\]]*'Interview'[^\]]*\]/);
+    assert.doesNotMatch(handler, /allowedStatuses\s*=\s*\[[^\]]*'Hired'[^\]]*\]/);
 });

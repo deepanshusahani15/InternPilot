@@ -77,7 +77,8 @@ test('the TTL index is only created once per store', async () => {
     const store = storeOn(collection, clock);
     await call(store, 'set', 'a', sessionFor('u1', new Date(clock.now + SESSION_TTL_MS)));
     await call(store, 'set', 'b', sessionFor('u2', new Date(clock.now + SESSION_TTL_MS)));
-    assert.equal(collection.calls.filter(c => c[0] === 'createIndex').length, 1);
+    const indexes = collection.calls.filter(c => c[0] === 'createIndex').map(c => Object.keys(c[1])[0]);
+    assert.deepEqual(indexes.sort(), ['expires', 'userId'], 'the TTL index and the per-user index (#196), once each');
 });
 
 test('missing and expired sessions come back empty, and expired ones are removed', async () => {

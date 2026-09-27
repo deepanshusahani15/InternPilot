@@ -1,0 +1,90 @@
+<% layout('layouts/boilerplate') %>
+<%
+    const status = verificationStatus || 'pending';
+    const styles = {
+        pending: 'border-amber-200 bg-amber-50 text-amber-800',
+        approved: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+        rejected: 'border-rose-200 bg-rose-50 text-rose-800',
+        suspended: 'border-rose-300 bg-rose-100 text-rose-900'
+    };
+    const icons = {
+        pending: 'ph-clock', approved: 'ph-seal-check', rejected: 'ph-x-circle', suspended: 'ph-warning-octagon'
+    };
+    const documents = verification && Array.isArray(verification.documents) ? verification.documents : [];
+    const history = verification && Array.isArray(verification.history) ? verification.history : [];
+%>
+
+<div class="mx-auto max-w-4xl space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <a href="/candidate/profile" class="text-xs font-semibold text-indigo-700 hover:underline"><i class="ph-bold ph-arrow-left"></i> Candidate profile</a>
+            <h1 class="mt-2 text-2xl font-bold text-slate-900">Identity & PMIS verification</h1>
+            <p class="mt-1 text-sm text-slate-600">Verification approval is required before you can submit new applications or accept internship offers.</p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold <%= styles[status] %>">
+            <i class="ph-bold <%= icons[status] %>"></i> <%= statusLabel(status) %>
+        </span>
+    </div>
+
+    <% if (verification && verification.reviewerReason) { %>
+        <section class="rounded-xl border p-4 <%= status === 'approved' ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50' %>">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-700">Latest admin review</p>
+            <p class="mt-1 text-sm text-slate-800"><%= verification.reviewerReason %></p>
+        </section>
+    <% } %>
+
+    <% if (status !== 'approved') { %>
+        <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 class="text-base font-bold text-slate-900">Submit documents for review</h2>
+            <p class="mt-1 text-xs leading-relaxed text-slate-600">Files are stored separately from your profile. Enter only the final four digits of your identity document—never enter a full ID number.</p>
+            <form action="/candidate/verification/documents" method="POST" enctype="multipart/form-data" class="mt-5 grid gap-4 sm:grid-cols-2">
+                <label class="block text-sm font-semibold text-slate-700">Document category
+                    <select name="documentType" class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" required>
+                        <option value="identity">Identity document</option>
+                        <option value="education">Education record</option>
+                        <option value="income">Income evidence</option>
+                        <option value="other">Other supporting document</option>
+                    </select>
+                </label>
+                <label class="block text-sm font-semibold text-slate-700">Identity document — last 4 digits only
+                    <input name="identifierLastFour" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required placeholder="1234" class="mt-1.5 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                </label>
+                <label class="block text-sm font-semibold text-slate-700 sm:col-span-2">Verification documents
+                    <input name="documents" type="file" accept="application/pdf,image/png,image/jpeg" multiple required class="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                    <span class="mt-1 block text-xs font-normal text-slate-500">PDF, PNG, or JPG. Up to four files, 5MB each.</span>
+                </label>
+                <div class="sm:col-span-2"><button class="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">Submit for review</button></div>
+            </form>
+        </section>
+    <% } %>
+
+    <% if (documents.length) { %>
+        <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 class="text-base font-bold text-slate-900">Submitted document references</h2>
+            <p class="mt-1 text-xs text-slate-500">Stored identifier: <span class="font-semibold text-slate-700"><%= verification.maskedIdentifier || 'Not provided' %></span></p>
+            <ul class="mt-4 divide-y divide-slate-100">
+                <% documents.forEach(document => { %>
+                    <li class="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                        <span><i class="ph-bold ph-file-text text-indigo-600"></i> <%= document.fileName %> <span class="ml-1 text-xs text-slate-500">· <%= document.documentType %></span></span>
+                        <% if (document.fileUrl) { %><a href="<%= document.fileUrl %>" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-indigo-700 hover:underline">View document</a><% } %>
+                    </li>
+                <% }) %>
+            </ul>
+        </section>
+    <% } %>
+
+    <% if (history.length) { %>
+        <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 class="text-base font-bold text-slate-900">Verification history</h2>
+            <ol class="mt-4 space-y-4 border-l-2 border-slate-200 pl-4">
+                <% history.slice().reverse().forEach(entry => { %>
+                    <li class="relative text-sm"><span class="absolute -left-[1.32rem] top-1.5 h-2.5 w-2.5 rounded-full bg-indigo-500"></span>
+                        <p class="font-semibold text-slate-800"><%= entry.fromStatus ? statusLabel(entry.fromStatus) + ' → ' : '' %><%= statusLabel(entry.toStatus) %></p>
+                        <p class="mt-0.5 text-slate-600"><%= entry.reason %></p>
+                        <p class="mt-1 text-xs text-slate-500"><%= entry.changedAt ? new Date(entry.changedAt).toLocaleString('en-IN') : '' %><% if (entry.changedBy && entry.changedBy.name) { %> · <%= entry.changedBy.name %><% } %></p>
+                    </li>
+                <% }) %>
+            </ol>
+        </section>
+    <% } %>
+</div>

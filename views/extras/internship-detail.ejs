@@ -1,6 +1,6 @@
 <% layout('layouts/boilerplate') %>
 
-<div class="max-w-4xl mx-auto px-4 py-8 space-y-6">
+<div class="max-w-4xl mx-auto px-4 py-8 space-y-6" data-animate-stagger>
 
     <!-- Top Navigation / Breadcrumb -->
     <div class="flex items-center justify-between">
@@ -319,7 +319,7 @@
 
             <% } else { %>
                 <!-- Candidate / Student Action Area -->
-                <div>
+                <div data-apply-card>
                     <% if (!currentUser) { %>
                         <% if (appPaused) { %>
                             <button disabled
@@ -378,7 +378,7 @@
                         <% if (requiresApplicationKit) { %>
                             <p class="mt-2 text-center text-xs text-slate-500">This role includes questions from the hiring team.</p>
                         <% } else { %>
-                            <form action="/internships/<%= internship._id %>/apply" method="POST">
+                            <form action="/internships/<%= internship._id %>/apply" method="POST" data-quick-apply-form data-no-loading data-internship-title="<%= internship.title %>" data-company-name="<%= internship.companyName || internship.company || '' %>">
                                 <button type="submit"
                                     class="mt-2 w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer">
                                     <i class="ph-bold ph-paper-plane-tilt text-lg"></i>

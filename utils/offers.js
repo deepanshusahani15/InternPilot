@@ -3,6 +3,8 @@ const Application = require('../models/Application');
 const Internship = require('../models/Internship');
 const Notification = require('../models/Notification');
 const { createPlacementForAcceptedOffer } = require('./placements');
+const CandidateVerification = require('../models/CandidateVerification');
+const { assertCandidateVerified } = require('./candidateVerification');
 
 const ELIGIBLE_APPLICATION_STATUSES = ['Shortlisted', 'Interview'];
 const DECLINED_APPLICATION_STATUS = 'Offer Declined';
@@ -199,7 +201,12 @@ async function acceptOffer({
     // Kept injectable because the offer lifecycle unit tests use in-memory
     // models. The application route always supplies the real Placement model.
     PlacementModel = null
+    CandidateVerificationModel = CandidateVerification
 }) {
+    // This runs before the offer is moved into its short-lived `accepting`
+    // state, so an unverified candidate cannot reserve a vacancy.
+    await assertCandidateVerified(candidateId, CandidateVerificationModel);
+
     const offer = await OfferModel.findOneAndUpdate(
         {
             _id: offerId,

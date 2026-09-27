@@ -1,0 +1,90 @@
+<% layout('layouts/boilerplate') %>
+<%
+    const statusStyles = {
+        pending: 'border-amber-200 bg-amber-50 text-amber-800',
+        approved: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+        rejected: 'border-rose-200 bg-rose-50 text-rose-800',
+        suspended: 'border-rose-300 bg-rose-100 text-rose-900'
+    };
+    const reviewActions = {
+        pending: [
+            { action: 'approve', label: 'Approve', placeholder: 'Reason for approval', buttonClass: 'bg-emerald-600 hover:bg-emerald-700' },
+            { action: 'reject', label: 'Reject', placeholder: 'Reason for rejection', buttonClass: 'bg-rose-600 hover:bg-rose-700' },
+            { action: 'suspend', label: 'Suspend', placeholder: 'Reason for suspension', buttonClass: 'bg-slate-800 hover:bg-slate-900' }
+        ],
+        approved: [
+            { action: 'suspend', label: 'Suspend', placeholder: 'Reason for suspension', buttonClass: 'bg-rose-600 hover:bg-rose-700' }
+        ],
+        rejected: [
+            { action: 'approve', label: 'Approve', placeholder: 'Reason for approval', buttonClass: 'bg-emerald-600 hover:bg-emerald-700' },
+            { action: 'suspend', label: 'Suspend', placeholder: 'Reason for suspension', buttonClass: 'bg-slate-800 hover:bg-slate-900' }
+        ],
+        suspended: [
+            { action: 'approve', label: 'Approve', placeholder: 'Reason for approval', buttonClass: 'bg-emerald-600 hover:bg-emerald-700' },
+            { action: 'reject', label: 'Reject', placeholder: 'Reason for rejection', buttonClass: 'bg-rose-600 hover:bg-rose-700' }
+        ]
+    };
+%>
+
+<div class="mx-auto max-w-7xl space-y-6 py-4">
+    <header class="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div>
+            <a href="/admin/dashboard" class="text-xs font-semibold text-indigo-700 hover:underline"><i class="ph-bold ph-arrow-left"></i> Admin dashboard</a>
+            <h1 class="mt-2 text-2xl font-bold text-slate-900">Candidate identity & PMIS verification</h1>
+            <p class="mt-1 text-sm text-slate-600">Review document references, make an accountable decision, and inspect every status transition.</p>
+        </div>
+        <div class="flex flex-wrap gap-2" aria-label="Verification filters">
+            <% [['pending', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['suspended', 'Suspended'], ['all', 'All']].forEach(([value, label]) => { %>
+                <a href="/admin/candidate-verifications?status=<%= value %>" class="rounded-lg px-3 py-2 text-xs font-bold <%= currentStatus === value ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50' %>"><%= label %></a>
+            <% }) %>
+        </div>
+    </header>
+
+    <% if (!verifications.length) { %>
+        <section class="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+            <i class="ph-bold ph-check-circle text-4xl text-emerald-500"></i>
+            <h2 class="mt-3 text-base font-bold text-slate-900">No <%= currentStatus === 'all' ? '' : currentStatus + ' ' %>candidate verifications</h2>
+            <p class="mt-1 text-sm text-slate-500">Submitted documents will appear here for review.</p>
+        </section>
+    <% } else { %>
+        <div class="space-y-5">
+            <% verifications.forEach(verification => { const candidate = verification.candidate || {}; const documents = Array.isArray(verification.documents) ? verification.documents : []; const history = Array.isArray(verification.history) ? verification.history : []; %>
+                <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="flex flex-col justify-between gap-4 lg:flex-row">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-lg font-bold text-slate-900"><%= candidate.name || 'Deleted candidate' %></h2>
+                                <span class="rounded-full border px-2.5 py-1 text-[11px] font-bold <%= statusStyles[verification.status] || statusStyles.pending %>"><%= statusLabel(verification.status) %></span>
+                            </div>
+                            <p class="mt-1 text-sm text-slate-600"><%= candidate.email || 'No email available' %></p>
+                            <p class="mt-2 text-xs text-slate-500">Submitted <%= verification.submittedAt ? new Date(verification.submittedAt).toLocaleString('en-IN') : '—' %> · Masked identifier: <span class="font-bold text-slate-700"><%= verification.maskedIdentifier || 'Not supplied' %></span></p>
+                        </div>
+                        <% const actions = reviewActions[verification.status] || []; %>
+                        <% if (actions.length) { %>
+                            <div class="min-w-72 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <p class="text-xs font-bold text-slate-700">Decision reason (required)</p>
+                                <% actions.forEach(({ action, label, placeholder, buttonClass }) => { %>
+                                    <form action="/admin/candidate-verifications/<%= verification._id %>/<%= action %>" method="POST" class="mt-2 flex flex-wrap gap-2">
+                                        <input name="reason" required maxlength="1000" placeholder="<%= placeholder %>" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs" />
+                                        <button class="rounded-lg <%= buttonClass %> px-3 py-2 text-xs font-bold text-white"><%= label %></button>
+                                    </form>
+                                <% }) %>
+                            </div>
+                        <% } %>
+                    </div>
+
+                    <div class="mt-5 grid gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
+                        <section>
+                            <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500">Document references</h3>
+                            <% if (documents.length) { %><ul class="mt-2 space-y-2 text-sm"><% documents.forEach(document => { %><li class="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2"><span><i class="ph-bold ph-file-text text-indigo-600"></i> <%= document.fileName %> <span class="text-xs text-slate-500">· <%= document.documentType %></span></span><% if (document.fileUrl) { %><a href="<%= document.fileUrl %>" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-indigo-700 hover:underline">Open</a><% } %></li><% }) %></ul><% } else { %><p class="mt-2 text-sm text-slate-500">No document references found.</p><% } %>
+                        </section>
+                        <section>
+                            <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500">Audit history</h3>
+                            <% if (history.length) { %><ol class="mt-2 space-y-2"><% history.slice().reverse().forEach(entry => { %><li class="rounded-lg bg-slate-50 px-3 py-2 text-xs"><p class="font-bold text-slate-800"><%= entry.fromStatus ? statusLabel(entry.fromStatus) + ' → ' : '' %><%= statusLabel(entry.toStatus) %></p><p class="mt-0.5 text-slate-600"><%= entry.reason %></p><p class="mt-1 text-slate-500"><%= entry.changedAt ? new Date(entry.changedAt).toLocaleString('en-IN') : '' %><% if (entry.changedBy && entry.changedBy.name) { %> · <%= entry.changedBy.name %><% } %></p></li><% }) %></ol><% } else { %><p class="mt-2 text-sm text-slate-500">No history recorded.</p><% } %>
+                        </section>
+                    </div>
+                </article>
+            <% }) %>
+        </div>
+    <% } %>
+</div>

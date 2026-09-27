@@ -2,6 +2,14 @@
 <% const permissionList = typeof permissions !== 'undefined' && Array.isArray(permissions) ? permissions : []; %>
 <% const canReviewApplications = permissionList.includes('applications:review'); %>
 <% const canIssueOffer = canReviewApplications && ['Shortlisted', 'Interview'].includes(application.status); %>
+<% const candidateVerificationRecord = typeof candidateVerification !== 'undefined' && candidateVerification ? candidateVerification : null; %>
+<% const candidateVerificationStatus = candidateVerificationRecord && candidateVerificationRecord.status ? candidateVerificationRecord.status : 'pending'; %>
+<% const candidateVerificationBadge = {
+    pending: { label: 'Verification Pending', classes: 'bg-amber-50 text-amber-800 border-amber-200', icon: 'ph-clock' },
+    approved: { label: 'Identity Verified', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'ph-seal-check' },
+    rejected: { label: 'Verification Rejected', classes: 'bg-rose-50 text-rose-700 border-rose-200', icon: 'ph-x-circle' },
+    suspended: { label: 'Verification Suspended', classes: 'bg-rose-100 text-rose-800 border-rose-300', icon: 'ph-warning-octagon' }
+}[candidateVerificationStatus] || { label: 'Verification Pending', classes: 'bg-amber-50 text-amber-800 border-amber-200', icon: 'ph-clock' }; %>
 <% const candidateSkillProfiles = (typeof skillProfiles !== 'undefined' && Array.isArray(skillProfiles) && skillProfiles.length)
     ? skillProfiles
     : ((candidate && Array.isArray(candidate.skills))
@@ -60,6 +68,9 @@
                         PMIS Eligible
                     </span>
                 <% } %>
+                <span class="inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded border <%= candidateVerificationBadge.classes %>">
+                    <i class="ph-bold <%= candidateVerificationBadge.icon %>"></i> <%= candidateVerificationBadge.label %>
+                </span>
             </div>
         </div>
 
@@ -104,7 +115,7 @@
                     </div>
                     <div>
                         <span class="text-slate-400 font-medium block mb-1">Application Status</span>
-                        <% const isReadOnlyStatus = ['Withdrawn', 'withdrawn', 'Hired', 'Offer Declined'].includes(application.status); %>
+                        <% const isReadOnlyStatus = ['Withdrawn', 'withdrawn', 'Interview', 'Hired', 'Offer Declined'].includes(application.status); %>
                         <% if (!isReadOnlyStatus && canReviewApplications) { %>
                             <form action="/company/applications/<%= application._id %>/status"
                                 method="POST" class="inline-block">
@@ -118,8 +129,6 @@
                                     <option value="Submitted" <%= application.status === 'Submitted' ? 'selected' : '' %>>Submitted</option>
                                     <option value="Under Review" <%= application.status === 'Under Review' ? 'selected' : '' %>>Under Review</option>
                                     <option value="Shortlisted" <%= application.status === 'Shortlisted' ? 'selected' : '' %>>Shortlisted</option>
-                                    <option value="Interview" <%= application.status === 'Interview' ? 'selected' : '' %>>Interview</option>
-                                    <option value="Hired" <%= application.status === 'Hired' ? 'selected' : '' %>>Hired</option>
                                     <option value="Rejected" <%= application.status === 'Rejected' ? 'selected' : '' %>>Rejected</option>
                                 </select>
                             </form>

@@ -2,12 +2,12 @@
 
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-12 mt-16">
     <!-- Header Section -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-            <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                <i class="ph-bold ph-bookmark-simple text-rose-500"></i> Saved Internships
+    <div class="ip-hero flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="relative">
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                <i class="ph-bold ph-bookmark-simple text-rose-200"></i> Saved Internships
             </h1>
-            <p class="text-slate-500 text-sm mt-1">Keep track of the opportunities you're interested in applying to later.</p>
+            <p class="text-indigo-100/90 text-sm mt-1">Keep track of the opportunities you're interested in applying to later.</p>
         </div>
         <div id="savedCounterContainer">
             <span id="savedCounterBadge" class="<%= (!internships || internships.length === 0) ? 'hidden' : 'inline-flex' %> items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
@@ -19,9 +19,7 @@
 
     <!-- Empty State (No bookmarks saved) -->
     <div id="noSavedState" class="<%= (!internships || internships.length === 0) ? '' : 'hidden' %> bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
-            <i class="ph-bold ph-bookmark-simple text-3xl"></i>
-        </div>
+        <%- include('../partials/plane-3d') %>
         <h3 class="text-base font-bold text-slate-800">No Saved Internships</h3>
         <p class="text-xs text-slate-500 mt-1 mb-5 max-w-sm mx-auto">You haven't bookmarked any internships yet. Explore open roles and save ones that catch your eye.</p>
         <a href="/internships" class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm">
@@ -120,11 +118,11 @@
 
     <!-- Saved Internships Grid -->
     <% if (internships && internships.length > 0) { %>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="saved-grid">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="saved-grid" data-animate-stagger>
             <% internships.forEach(item => { %>
                 <% const isItemPaused = item.status === 'paused' || item.isPaused; %>
                 <% const deadline = item.deadlineInfo || (typeof formatDeadlineUrgency === 'function' ? formatDeadlineUrgency(item.applicationDeadline) : null); %>
-                <div
+                <div data-tilt
                     class="internship-card bg-white border <%= isItemPaused ? 'border-amber-300' : 'border-slate-200' %> rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative group"
                     id="card-<%= item._id %>"
                     data-id="<%= item._id %>"

@@ -10,6 +10,7 @@ const pdfParseModule = require('pdf-parse');
 const mammoth = require('mammoth');
 
 const User = require('../models/User');
+const CandidateVerification = require('../models/CandidateVerification');
 const Internship = require('../models/Internship');
 const Application = require('../models/Application');
 const Recommendation = require('../models/Recommendation');
@@ -252,14 +253,16 @@ ${text}
 router.get('/candidate/profile', isAuthenticated, authorize('candidate'), async (req, res) => {
     try {
         const userId = req.user._id || req.user.id;
-        const [freshUser, activeApplicationsCount] = await Promise.all([
+        const [freshUser, candidateVerification, activeApplicationsCount] = await Promise.all([
             User.findById(userId),
+            CandidateVerification.findOne({ candidate: userId }).select('status reviewerReason submittedAt reviewedAt'),
             Application.countDocuments({ candidate: userId, status: { $nin: ['Withdrawn', 'withdrawn', 'Rejected'] } })
         ]);
 
         res.render('candidate/candidate-profile', {
             user: freshUser,
             candidate: freshUser,
+            candidateVerification,
             skillProfiles: buildSkillProfiles(freshUser),
             profileCompletion: calculateProfileCompletion(freshUser),
             activeApplicationsCount,
@@ -1172,5 +1175,4 @@ router.get('/recommendations/:userId', isAuthenticated, authorize('candidate'), 
 router.analyzeResumeQuality = analyzeResumeQuality;
 
 module.exports = router;
-
 
