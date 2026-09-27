@@ -277,6 +277,15 @@ EMAIL_PASS=your_gmail_app_password
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_CALLBACK_URL=http://localhost:8080/auth/google/callback
+
+# Registration abuse protection (required in every environment)
+# Create an hCaptcha site at https://www.hcaptcha.com/ and keep the secret server-side.
+CAPTCHA_PROVIDER=hcaptcha
+HCAPTCHA_SITE_KEY=your_hcaptcha_site_key
+HCAPTCHA_SECRET_KEY=your_hcaptcha_secret_key
+# Optional: 5 attempts per IP each hour is the secure default.
+REGISTER_RATE_LIMIT_MAX=5
+REGISTER_RATE_LIMIT_WINDOW_MS=3600000
 ```
 
 ---

@@ -4,6 +4,11 @@ const passport = require('passport');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { sendOTPEmail } = require('../utils/sendEmail');
+const {
+    publicCaptchaConfig,
+    createRegistrationRateLimiter,
+    createCaptchaVerificationMiddleware
+} = require('../utils/registrationSecurity');
 
 const generateSecureOTP = () => {
     return crypto.randomInt(100000, 1000000).toString();
@@ -19,9 +24,14 @@ const redirectIfAuthenticated = (req, res, next) => {
 };
 
 router.get('/login', redirectIfAuthenticated, (req, res) => res.render('auth/login'));
-router.get('/register', redirectIfAuthenticated, (req, res) => res.render('auth/register'));
+router.get('/register', redirectIfAuthenticated, (req, res) => res.render('auth/register', {
+    captcha: publicCaptchaConfig()
+}));
 
-router.post('/register', async (req, res) => {
+// Rate-limit first so automated attempts cannot use CAPTCHA verification as a
+// free external-service oracle. CAPTCHA then fails closed before any account,
+// OTP, or database work is performed.
+router.post('/register', createRegistrationRateLimiter(), createCaptchaVerificationMiddleware(), async (req, res) => {
     const { name, email, password, role, adminSecretKey, companyName, cin, industry } = req.body;
     const normalizedEmail = (email || '').trim().toLowerCase();
     const trimmedName = (name || '').trim();

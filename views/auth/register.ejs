@@ -1,4 +1,12 @@
 <% layout('layouts/boilerplate') %>
+<%
+    const captchaSettings = typeof captcha !== 'undefined' && captcha ? captcha : { provider: 'hcaptcha', configured: false, siteKey: '' };
+    const registrationMessage = typeof registrationError !== 'undefined' ? registrationError : '';
+%>
+
+<% if (captchaSettings.configured && captchaSettings.provider === 'hcaptcha') { %>
+    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+<% } %>
 
     <div class="max-w-xl mx-auto my-8 sm:my-12 px-4">
         <!-- Main Card Container -->
@@ -19,6 +27,13 @@
                     <p class="text-xs text-slate-500 font-medium mt-1">Join InternPilot to explore or post opportunities
                     </p>
                 </div>
+
+                <% if (registrationMessage) { %>
+                    <div class="mb-5 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-800" role="alert">
+                        <i class="ph-bold ph-warning-circle mt-0.5 text-base"></i>
+                        <span><%= registrationMessage %></span>
+                    </div>
+                <% } %>
 
                 <!-- Registration Form -->
                 <form action="/auth/register" method="POST" class="space-y-4" data-loading-text="Creating Account...">
@@ -140,9 +155,24 @@
                         </div>
                     </div>
 
+                    <!-- hCaptcha creates the signed h-captcha-response field.
+                         Server validation is mandatory before registration. -->
+                    <% if (captchaSettings.configured && captchaSettings.provider === 'hcaptcha') { %>
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="mb-2 text-xs font-semibold text-slate-700">Security check</p>
+                            <div class="h-captcha" data-sitekey="<%= captchaSettings.siteKey %>"></div>
+                            <noscript><p class="mt-2 text-xs text-rose-700">JavaScript is required to complete the security check.</p></noscript>
+                        </div>
+                    <% } else { %>
+                        <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-medium text-rose-800" role="alert">
+                            Registration is temporarily unavailable because the security check is not configured. Please try again later.
+                        </div>
+                    <% } %>
+
                     <!-- Submit Button -->
                     <button type="submit"
-                        class="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer mt-2">
+                        <% if (!captchaSettings.configured) { %>disabled aria-disabled="true"<% } %>
+                        class="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:cursor-not-allowed disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer mt-2">
                         <span>Create Account</span>
                         <i class="ph-bold ph-arrow-right text-base"></i>
                     </button>
