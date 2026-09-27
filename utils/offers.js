@@ -2,6 +2,7 @@ const Offer = require('../models/Offer');
 const Application = require('../models/Application');
 const Internship = require('../models/Internship');
 const Notification = require('../models/Notification');
+const { createPlacementForAcceptedOffer } = require('./placements');
 
 const ELIGIBLE_APPLICATION_STATUSES = ['Shortlisted', 'Interview'];
 const DECLINED_APPLICATION_STATUS = 'Offer Declined';
@@ -194,7 +195,10 @@ async function acceptOffer({
     now = new Date(),
     OfferModel = Offer,
     ApplicationModel = Application,
-    InternshipModel = Internship
+    InternshipModel = Internship,
+    // Kept injectable because the offer lifecycle unit tests use in-memory
+    // models. The application route always supplies the real Placement model.
+    PlacementModel = null
 }) {
     const offer = await OfferModel.findOneAndUpdate(
         {
@@ -287,7 +291,16 @@ async function acceptOffer({
         throw new OfferLifecycleError('The offer could not be finalised. Please contact support.', 'OFFER_FINALISATION_FAILED', 500);
     }
 
-    return { offer: accepted, application: updatedApplication, internship: reservation.internship, listingClosed: reservation.closed };
+    let placement = null;
+    if (PlacementModel) {
+        placement = await createPlacementForAcceptedOffer({
+            offer: accepted,
+            now,
+            PlacementModel
+        });
+    }
+
+    return { offer: accepted, application: updatedApplication, internship: reservation.internship, placement, listingClosed: reservation.closed };
 }
 
 async function declineOffer({

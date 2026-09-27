@@ -1,0 +1,10 @@
+<% layout('layouts/boilerplate') %>
+<%
+    const label = value => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+%>
+<div class="mx-auto max-w-6xl space-y-6">
+    <header><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Outcome tracking</p><h1 class="mt-1 text-3xl font-bold text-slate-900">Internship placements</h1><p class="mt-2 text-sm text-slate-600">Follow accepted offers through joining, progress, completion, and verified certificates.</p></header>
+    <% if (!placements.length) { %><section class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center text-sm text-slate-600">No accepted offers have created placements yet.</section><% } else { %>
+        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200 text-sm"><thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500"><tr><th class="px-5 py-3">Candidate</th><th class="px-5 py-3">Internship</th><th class="px-5 py-3">Start</th><th class="px-5 py-3">Status</th><th class="px-5 py-3"></th></tr></thead><tbody class="divide-y divide-slate-100"><% placements.forEach(placement => { %><tr><td class="px-5 py-4 font-semibold text-slate-800"><%= placement.candidate?.name || 'Candidate' %><span class="block text-xs font-normal text-slate-500"><%= placement.candidate?.email || '' %></span></td><td class="px-5 py-4 text-slate-700"><%= placement.internship?.title || 'Internship' %></td><td class="px-5 py-4 text-slate-600"><%= new Date(placement.startDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) %></td><td class="px-5 py-4"><span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700"><%= label(placement.status) %></span></td><td class="px-5 py-4 text-right"><a href="/company/placements/<%= placement._id %>" class="font-bold text-indigo-700 hover:underline">Manage</a></td></tr><% }) %></tbody></table></div></div>
+    <% } %>
+</div>

@@ -4,6 +4,7 @@
         opportunities: ['/internships'],
         candidateProfile: ['/candidate/profile', '/candidate/resume-builder'],
         applications: ['/candidate/applications', '/candidate/my-applications'],
+        placements: ['/candidate/placements'],
         certificates: ['/candidate/certificates'],
         savedInternships: ['/candidate/saved-internships'],
         savedSearches: ['/candidate/saved-searches'],
@@ -13,6 +14,7 @@
         notifications: ['/notifications'],
         companyNotifications: ['/company/notifications'],
         companyDashboard: ['/company/dashboard', '/company/internships', '/company/applications'],
+        companyPlacements: ['/company/placements'],
         companyProfile: ['/company/profile'],
         manageTeam: ['/company/team'],
         activityHistory: ['/company/activity'],
@@ -88,6 +90,7 @@
                         <% if (currentUser.role === 'candidate') { %>
                             <a href="/candidate/profile" data-nav-link data-nav-variant="desktop" data-nav-prefixes="<%= navPrefixAttribute('candidateProfile') %>" class="<%= desktopLinkClass(isActive('candidateProfile')) %>" <%- ariaCurrent(isActive('candidateProfile')) %>>Candidate Profile</a>
                             <a href="/candidate/applications" data-nav-link data-nav-variant="desktop" data-nav-prefixes="<%= navPrefixAttribute('applications') %>" class="<%= desktopLinkClass(isActive('applications')) %>" <%- ariaCurrent(isActive('applications')) %>>My Applications</a>
+                            <a href="/candidate/placements" data-nav-link data-nav-variant="desktop" data-nav-prefixes="<%= navPrefixAttribute('placements') %>" class="<%= desktopLinkClass(isActive('placements')) %>" <%- ariaCurrent(isActive('placements')) %>>Placements</a>
                             <a href="/candidate/certificates" data-nav-link data-nav-variant="desktop" data-nav-prefixes="<%= navPrefixAttribute('certificates') %>" class="<%= desktopLinkClass(isActive('certificates')) %>" <%- ariaCurrent(isActive('certificates')) %>>Certificates</a>
                             <a href="/recommendations/<%= currentUser._id %>" data-nav-link data-nav-variant="desktop" data-nav-prefixes="<%= navPrefixAttribute('recommendations') %>" class="<%= desktopLinkClass(isActive('recommendations')) %>" <%- ariaCurrent(isActive('recommendations')) %>>Recommendations</a>
                             <div class="group relative inline-block">
@@ -101,6 +104,7 @@
                             </div>
                         <% } else if (['company', 'recruiter', 'hiring_manager'].includes(currentUser.role)) { %>
                             <a href="/company/dashboard" data-nav-link data-nav-variant="desktop" data-nav-prefixes="<%= navPrefixAttribute('companyDashboard') %>" class="<%= desktopLinkClass(isActive('companyDashboard')) %>" <%- ariaCurrent(isActive('companyDashboard')) %>>Company Dashboard</a>
+                            <a href="/company/placements" data-nav-link data-nav-variant="desktop" data-nav-prefixes="<%= navPrefixAttribute('companyPlacements') %>" class="<%= desktopLinkClass(isActive('companyPlacements')) %>" <%- ariaCurrent(isActive('companyPlacements')) %>>Placements</a>
                             <% if (['company', 'recruiter'].includes(currentUser.role)) { %>
                                 <div class="group relative inline-block">
                                     <button class="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors <%= isActive('companyProfile') || isActive('manageTeam') || isActive('activityHistory') ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600' %>">
@@ -203,6 +207,7 @@
                     <% if (currentUser.role === 'candidate') { %>
                         <a href="/candidate/profile" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('candidateProfile') %>" class="<%= mobileLinkClass(isActive('candidateProfile')) %>" <%- ariaCurrent(isActive('candidateProfile')) %>>Candidate Profile</a>
                         <a href="/candidate/applications" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('applications') %>" class="<%= mobileLinkClass(isActive('applications')) %>" <%- ariaCurrent(isActive('applications')) %>>My Applications</a>
+                        <a href="/candidate/placements" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('placements') %>" class="<%= mobileLinkClass(isActive('placements')) %>" <%- ariaCurrent(isActive('placements')) %>>Placements</a>
                         <a href="/candidate/certificates" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('certificates') %>" class="<%= mobileLinkClass(isActive('certificates')) %>" <%- ariaCurrent(isActive('certificates')) %>>Certificates</a>
                         <a href="/candidate/saved-searches" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('savedSearches') %>" class="<%= mobileLinkClass(isActive('savedSearches')) %>" <%- ariaCurrent(isActive('savedSearches')) %>>Saved Searches</a>
                         <a href="/recommendations/<%= currentUser._id %>" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('recommendations') %>" class="<%= mobileLinkClass(isActive('recommendations')) %>" <%- ariaCurrent(isActive('recommendations')) %>>Recommendations</a>
@@ -211,6 +216,7 @@
                         <a href="/notifications" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('notifications') %>" class="<%= mobileLinkClass(isActive('notifications')) %>" <%- ariaCurrent(isActive('notifications')) %>>Notifications<% if (notificationUnreadCount > 0) { %> (<%= notificationUnreadCount > 99 ? '99+' : notificationUnreadCount %>)<% } %></a>
                     <% } else if (['company', 'recruiter', 'hiring_manager'].includes(currentUser.role)) { %>
                         <a href="/company/dashboard" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('companyDashboard') %>" class="<%= mobileLinkClass(isActive('companyDashboard')) %>" <%- ariaCurrent(isActive('companyDashboard')) %>>Company Dashboard</a>
+                        <a href="/company/placements" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('companyPlacements') %>" class="<%= mobileLinkClass(isActive('companyPlacements')) %>" <%- ariaCurrent(isActive('companyPlacements')) %>>Placements</a>
                         <% if (['company', 'recruiter'].includes(currentUser.role)) { %>
                         <a href="/company/profile" data-nav-link data-nav-variant="mobile" data-nav-prefixes="<%= navPrefixAttribute('companyProfile') %>" class="<%= mobileLinkClass(isActive('companyProfile')) %>" <%- ariaCurrent(isActive('companyProfile')) %>>Company Profile</a>
                         <% } %>
@@ -327,5 +333,4 @@
         syncActiveNavigation();
     })();
 </script>
-
 

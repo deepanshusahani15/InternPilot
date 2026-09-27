@@ -37,6 +37,16 @@ const certificateSchema = new mongoose.Schema({
         ref: 'Internship',
         required: true
     },
+    // Completion certificates are generated from a placement. This remains
+    // optional so certificates issued before the placement lifecycle (and
+    // existing manually issued credentials) remain valid.
+    placement: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Placement',
+        unique: true,
+        sparse: true,
+        index: true
+    },
     candidateName: {
         type: String,
         required: true,

@@ -148,6 +148,7 @@ app.use('/', userRoutes);
 app.use('/', candidateRoutes);
 app.use('/', companyRoutes);
 app.use('/', require('./routes/offers'));
+app.use('/', require('./routes/placements'));
 app.use('/admin', adminRoutes);
 app.use('/', chatRoutes);
 app.use('/', notificationRoutes);

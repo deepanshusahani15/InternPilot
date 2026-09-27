@@ -1,0 +1,72 @@
+<% layout('layouts/boilerplate') %>
+<%
+    const statusLabel = String(placement.status || '').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+    const companyName = placement.company?.companyDetails?.companyName || placement.company?.name || 'Company';
+    const isActive = ['joining_pending', 'joined', 'in_progress'].includes(placement.status);
+    const feedback = placement.candidateFeedback || {};
+%>
+
+<div class="mx-auto max-w-4xl space-y-6">
+    <a href="/candidate/placements" class="inline-flex items-center gap-1 text-sm font-semibold text-indigo-700 hover:underline"><i class="ph-bold ph-arrow-left" aria-hidden="true"></i> All placements</a>
+
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <header class="border-b border-indigo-100 bg-indigo-50 px-6 py-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div><p class="text-xs font-bold uppercase tracking-wider text-indigo-700">Internship placement</p><h1 class="mt-1 text-2xl font-bold text-slate-900"><%= placement.internship?.title || 'Internship' %></h1><p class="mt-1 text-sm text-slate-600"><%= companyName %></p></div>
+                <span class="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-sm"><%= statusLabel %></span>
+            </div>
+        </header>
+        <div class="grid gap-4 p-6 sm:grid-cols-3">
+            <div><p class="text-xs font-medium text-slate-500">Start date</p><p class="mt-1 text-sm font-bold text-slate-800"><%= new Date(placement.startDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) %></p></div>
+            <div><p class="text-xs font-medium text-slate-500">Expected end</p><p class="mt-1 text-sm font-bold text-slate-800"><%= placement.endDate ? new Date(placement.endDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : 'To be confirmed' %></p></div>
+            <div><p class="text-xs font-medium text-slate-500">Progress updates</p><p class="mt-1 text-sm font-bold text-slate-800"><%= (placement.progressUpdates || []).length %></p></div>
+        </div>
+    </section>
+
+    <% if (placement.status === 'joining_pending') { %>
+        <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 class="font-bold text-amber-900">Ready to confirm joining?</h2><p class="mt-1 text-sm text-amber-800">You can confirm on or after your agreed start date.</p><form action="/candidate/placements/<%= placement._id %>/confirm-joining" method="POST" class="mt-4"><button class="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-700">Confirm I joined</button></form></section>
+    <% } %>
+
+    <% if (placement.status === 'joined') { %>
+        <section class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><h2 class="font-bold text-emerald-900">Joining confirmed</h2><p class="mt-1 text-sm text-emerald-800">Start tracking progress when your internship work begins.</p><form action="/candidate/placements/<%= placement._id %>/start" method="POST" class="mt-4"><button class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">Start internship progress</button></form></section>
+    <% } %>
+
+    <% if (placement.status === 'in_progress') { %>
+        <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 class="text-lg font-bold text-slate-900">Add a progress update</h2><p class="mt-1 text-sm text-slate-600">Log a milestone, deliverable, or useful update for the company.</p>
+            <form action="/candidate/placements/<%= placement._id %>/progress" method="POST" class="mt-4 grid gap-3">
+                <input name="title" maxlength="160" required placeholder="Milestone title" class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                <input type="date" name="milestoneDate" class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm">
+                <textarea name="details" maxlength="4000" required rows="4" placeholder="What did you work on or complete?" class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"></textarea>
+                <button class="w-fit rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">Save update</button>
+            </form>
+        </section>
+    <% } %>
+
+    <% if (isActive) { %>
+        <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 class="text-lg font-bold text-slate-900">Internship feedback</h2><p class="mt-1 text-sm text-slate-600">Your feedback is required before the company can complete the placement.</p>
+            <form action="/candidate/placements/<%= placement._id %>/feedback" method="POST" class="mt-4 grid gap-3">
+                <label class="text-sm font-semibold text-slate-700">Overall rating <select name="rating" required class="ml-2 rounded-lg border border-slate-300 px-2 py-1"><option value="">Select</option><% [5,4,3,2,1].forEach(value => { %><option value="<%= value %>" <%= feedback.rating === value ? 'selected' : '' %>><%= value %> / 5</option><% }) %></select></label>
+                <textarea name="comments" maxlength="4000" rows="4" placeholder="What went well? What could improve?" class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"><%= feedback.comments || '' %></textarea>
+                <label class="text-sm text-slate-700"><input type="checkbox" name="wouldRecommend" value="true" <%= feedback.wouldRecommend ? 'checked' : '' %>> I would recommend this internship.</label>
+                <button class="w-fit rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-100">Submit feedback</button>
+            </form>
+        </section>
+    <% } %>
+
+    <% if (placement.status === 'completed' && placement.certificate) { %>
+        <section class="rounded-2xl border border-emerald-200 bg-emerald-50 p-6"><h2 class="text-lg font-bold text-emerald-900">Placement completed</h2><p class="mt-1 text-sm text-emerald-800">Your verified completion certificate is ready.</p><a href="/certificates/<%= placement.certificate.certificateId %>/view" class="mt-4 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">View certificate</a></section>
+    <% } %>
+
+    <% if (placement.status === 'terminated') { %>
+        <section class="rounded-2xl border border-rose-200 bg-rose-50 p-6"><h2 class="text-lg font-bold text-rose-900">Placement ended</h2><p class="mt-2 whitespace-pre-line text-sm text-rose-800"><%= placement.terminationReason || 'No reason was provided.' %></p></section>
+    <% } %>
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-900">Progress history</h2>
+        <% if (!(placement.progressUpdates || []).length) { %><p class="mt-3 text-sm text-slate-500">No progress updates have been recorded yet.</p><% } else { %>
+            <ol class="mt-4 space-y-4"><% placement.progressUpdates.slice().reverse().forEach(update => { %><li class="border-l-2 border-indigo-200 pl-4"><div class="flex flex-wrap justify-between gap-2"><h3 class="font-bold text-slate-800"><%= update.title %></h3><time class="text-xs text-slate-500"><%= new Date(update.milestoneDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) %></time></div><p class="mt-1 whitespace-pre-line text-sm text-slate-600"><%= update.details %></p></li><% }) %></ol>
+        <% } %>
+    </section>
+</div>

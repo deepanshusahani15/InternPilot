@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Offer = require('../models/Offer');
 const Application = require('../models/Application');
 const Internship = require('../models/Internship');
+const Placement = require('../models/Placement');
 const { isAuthenticated, authorize } = require('../middleware/auth');
 const { requireCompanyPermission, belongsToCompany } = require('../middleware/companyAccess');
 const {
@@ -131,7 +132,11 @@ router.post('/candidate/offers/:id/accept', isAuthenticated, authorize('candidat
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             throw new OfferLifecycleError('Offer not found.', 'OFFER_NOT_FOUND', 404);
         }
-        const result = await acceptOffer({ offerId: req.params.id, candidateId: candidateId(req) });
+        const result = await acceptOffer({
+            offerId: req.params.id,
+            candidateId: candidateId(req),
+            PlacementModel: Placement
+        });
         try {
             await notifyOfferAccepted(result.offer, result.internship);
         } catch (notificationError) {
@@ -139,11 +144,11 @@ router.post('/candidate/offers/:id/accept', isAuthenticated, authorize('candidat
         }
 
         const message = result.listingClosed
-            ? 'Offer accepted. All seats are now filled, so the listing has closed.'
-            : 'Offer accepted. Your application is now marked as hired.';
-        if (wantsJson(req)) return res.json({ success: true, message, offer: result.offer, application: result.application });
+            ? 'Offer accepted. Your placement is ready; all seats are now filled, so the listing has closed.'
+            : 'Offer accepted. Your placement is ready for joining confirmation.';
+        if (wantsJson(req)) return res.json({ success: true, message, offer: result.offer, application: result.application, placement: result.placement });
         if (req.flash) req.flash('success_msg', message);
-        return res.redirect('/candidate/applications');
+        return res.redirect(result.placement ? `/candidate/placements/${result.placement._id}` : '/candidate/applications');
     } catch (error) {
         console.error('Error accepting offer:', error);
         return sendError(req, res, error, fallbackPath);

@@ -4,6 +4,7 @@ const Notification = require('../models/Notification');
 const { parseISTEndOfDay } = require('./dateUtils');
 const { runSavedSearchDigests } = require('./notifications');
 const { expireDueOffers } = require('./offers');
+const { runPlacementReminders } = require('./placements');
 
 const APPROACHING_DEADLINE_DAYS = parseInt(process.env.APPROACHING_DEADLINE_DAYS, 10) || 3;
 
@@ -104,4 +105,15 @@ cron.schedule('*/5 * * * *', async () => {
     }
 });
 
-module.exports = { runSavedSearchDigests, expireDueOffers };
+// Placement reminders are intentionally daily and idempotent per placement
+// and date. They cover joining confirmations, stale progress, and final
+// evaluation/feedback after an expected end date.
+cron.schedule('10 9 * * *', async () => {
+    try {
+        await runPlacementReminders();
+    } catch (error) {
+        console.error('[Scheduler] Error sending placement reminders:', error);
+    }
+}, { timezone: 'Asia/Kolkata' });
+
+module.exports = { runSavedSearchDigests, expireDueOffers, runPlacementReminders };

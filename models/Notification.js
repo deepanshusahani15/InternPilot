@@ -32,7 +32,14 @@ const notificationSchema = new mongoose.Schema({
             'offer_issued',
             'offer_accepted',
             'offer_declined',
-            'offer_expired'
+            'offer_expired',
+            'placement_joining_reminder',
+            'placement_progress_reminder',
+            'placement_evaluation_reminder',
+            'placement_feedback_reminder',
+            'placement_joined',
+            'placement_completed',
+            'placement_terminated'
         ],
         required: true
     },
@@ -47,6 +54,10 @@ const notificationSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Application'
     },
+    placement: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Placement'
+    },
     metadata: {
         threshold: { type: Number },
         interviewId: { type: String },
@@ -54,7 +65,9 @@ const notificationSchema = new mongoose.Schema({
         digestKey: { type: String },
         internshipCount: { type: Number },
         searchNames: [{ type: String }],
-        offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' }
+        offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' },
+        placementId: { type: mongoose.Schema.Types.ObjectId, ref: 'Placement' },
+        reminderKey: { type: String }
     },
     isRead: { type: Boolean, default: false, index: true }
 }, { timestamps: true });
