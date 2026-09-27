@@ -9,6 +9,9 @@ const router = express.Router();
 const Application = require('../models/Application');
 const InternshipDocument = require('../models/InternshipDocument');
 const User = require('../models/User');
+const CandidateVerification = require('../models/CandidateVerification');
+const Offer = require('../models/Offer');
+const Certificate = require('../models/Certificate');
 const Internship = require('../models/Internship');
 const SavedSearch = require('../models/SavedSearch');
 const { notifyCandidateWithdrawal } = require('../utils/recruiterNotifications');
@@ -16,6 +19,8 @@ const { isAuthenticated, authorize } = require('../middleware/auth');
 const { formatRelativeTime, formatLocalizedDateTime, formatDeadlineUrgency } = require('../utils/dateFormat');
 const { filterAndSortApplications } = require('../utils/applicationSearch');
 const { DOCUMENT_TYPES, getIssuedDocumentsByApplication } = require('../utils/internshipDocuments');
+const { calculateProfileCompletion } = require('../utils/profileCompletion');
+const { buildCandidateJourney } = require('../utils/candidateJourney');
 const {
     normalizeSavedSearchCriteria,
     hasSavedSearchCriteria,
@@ -504,6 +509,18 @@ router.get('/candidate/my-applications', isAuthenticated, authorize('candidate')
         const sortOrder = (req.query.sort || 'applied_desc').trim();
 
         const allApplications = await Application.find({ candidate: userId });
+        const [verification, offers, certificates] = await Promise.all([
+            CandidateVerification.findOne({ candidate: userId }).select('status submittedAt reviewedAt').lean(),
+            Offer.find({ candidate: userId }).select('_id status isActive expiresAt terms.startDate acceptedAt application').lean(),
+            Certificate.find({ candidate: userId, status: 'Issued' }).select('certificateId status issuedAt application').lean()
+        ]);
+        const journey = buildCandidateJourney({
+            profileCompletion: calculateProfileCompletion(candidate),
+            verification,
+            applications: allApplications,
+            offers,
+            certificates
+        });
         const stats = {
             total: allApplications.length,
             submitted: allApplications.filter(a => a.status === 'Submitted').length,
@@ -554,6 +571,7 @@ router.get('/candidate/my-applications', isAuthenticated, authorize('candidate')
             currentUser: req.user,
             applications: applicationSearch.applications,
             issuedDocumentsByApplication,
+            journey,
             stats,
             searchQuery: applicationSearch.search,
             statusFilter: applicationSearch.status,

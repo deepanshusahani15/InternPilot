@@ -1,0 +1,65 @@
+<%
+    const safeJourney = journey && typeof journey === 'object' ? journey : null;
+    const journeyStages = Array.isArray(safeJourney?.stages) ? safeJourney.stages : [];
+    const journeyAction = safeJourney?.action || null;
+    const badgeToneClasses = {
+        critical: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/45 dark:text-rose-200',
+        warning: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/45 dark:text-amber-200',
+        success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/45 dark:text-emerald-200',
+        neutral: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200',
+        info: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/70 dark:bg-indigo-950/45 dark:text-indigo-200'
+    };
+%>
+
+<% if (safeJourney && journeyAction) { %>
+    <section class="overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm dark:border-indigo-900/70 dark:bg-slate-900" aria-labelledby="candidate-journey-heading" data-candidate-journey-card>
+        <div class="border-b border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-sky-50 px-4 py-4 dark:border-indigo-900/70 dark:from-indigo-950/60 dark:via-slate-900 dark:to-sky-950/40 sm:px-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-indigo-700 dark:text-indigo-300">Your internship journey</p>
+                    <h2 id="candidate-journey-heading" class="mt-1 text-lg font-bold text-slate-900 dark:text-white">One clear next step, from profile to certificate</h2>
+                </div>
+                <% if (journeyAction.badge) { %>
+                    <span class="inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold <%= badgeToneClasses[journeyAction.badge.tone] || badgeToneClasses.info %>">
+                        <i class="ph-bold <%= journeyAction.badge.icon || 'ph-info' %>" aria-hidden="true"></i>
+                        <%= journeyAction.badge.label %>
+                    </span>
+                <% } %>
+            </div>
+
+            <div class="mt-5 overflow-x-auto pb-1" aria-label="Internship lifecycle progress" data-journey-timeline-scroll>
+                <ol class="flex min-w-[42rem] items-start" data-journey-timeline>
+                    <% journeyStages.forEach((stage, index) => { %>
+                        <li class="relative flex min-w-0 flex-1 flex-col items-center text-center">
+                            <span class="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border-2 <%= stage.state === 'complete' ? 'border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500' : (stage.state === 'current' ? 'border-indigo-700 bg-indigo-700 text-white shadow-lg shadow-indigo-200 dark:border-indigo-400 dark:bg-indigo-400 dark:text-slate-950 dark:shadow-none' : 'border-slate-200 bg-white text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500') %>">
+                                <i class="ph-bold <%= stage.state === 'complete' ? 'ph-check' : stage.icon %> text-base" aria-hidden="true"></i>
+                            </span>
+                            <% if (index < journeyStages.length - 1) { %>
+                                <span aria-hidden="true" class="absolute left-1/2 right-0 top-[1.0625rem] h-0.5 <%= stage.state === 'complete' ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700' %>"></span>
+                            <% } %>
+                            <span class="mt-2 text-[11px] font-semibold leading-tight <%= stage.state === 'current' ? 'text-indigo-700 dark:text-indigo-300' : (stage.state === 'complete' ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400') %>"><%= stage.label %></span>
+                            <% if (stage.state === 'current') { %><span class="mt-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400">Current stage</span><% } %>
+                        </li>
+                    <% }) %>
+                </ol>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div class="flex min-w-0 items-start gap-3">
+                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300">
+                    <i class="ph-bold <%= journeyAction.icon || 'ph-arrow-right' %> text-xl" aria-hidden="true"></i>
+                </span>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold uppercase tracking-[0.13em] text-indigo-700 dark:text-indigo-300"><%= journeyAction.eyebrow %></p>
+                    <h3 class="mt-0.5 text-base font-bold text-slate-900 dark:text-white"><%= journeyAction.title %></h3>
+                    <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300"><%= journeyAction.description %></p>
+                </div>
+            </div>
+            <a href="<%= journeyAction.href %>" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-800 focus:outline-none focus:ring-4 focus:ring-indigo-200 dark:bg-indigo-500 dark:text-slate-950 dark:hover:bg-indigo-400 dark:focus:ring-indigo-900">
+                <%= journeyAction.ctaLabel %>
+                <i class="ph-bold ph-arrow-right" aria-hidden="true"></i>
+            </a>
+        </div>
+    </section>
+<% } %>
