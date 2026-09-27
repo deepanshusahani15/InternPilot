@@ -80,6 +80,10 @@ const isValidEmail = (email) => {
     return typeof email === 'string' && EMAIL_REGEX.test(email);
 };
 
+const usesConsoleOtpTransport = () => String(process.env.EMAIL_TRANSPORT || '')
+    .trim()
+    .toLowerCase() === 'console';
+
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({
     '&': '&amp;',
     '<': '&lt;',
@@ -114,6 +118,22 @@ const sendOTPEmail = async (email, otp) => {
 
     if (!isValidEmail(cleanEmail)) {
         throw new Error('Invalid email address format.');
+    }
+
+    // Local OTP testing must never depend on real SMTP credentials. Keep this
+    // explicit development-only escape hatch disabled in production so OTPs
+    // cannot be written to production logs.
+    if (usesConsoleOtpTransport()) {
+        if (process.env.NODE_ENV === 'production') {
+            throw new Error('EMAIL_TRANSPORT=console cannot be used in production.');
+        }
+
+        console.log(`[EMAIL] DEVELOPMENT OTP for ${cleanEmail}: ${otp} (expires in 10 minutes)`);
+        return {
+            messageId: `console-${Date.now()}`,
+            accepted: [cleanEmail],
+            response: 'OTP logged to the development console'
+        };
     }
 
     const senderEmail = process.env.EMAIL_USER || process.env.SMTP_USER || 'no-reply@internpilot.com';
