@@ -4,44 +4,12 @@ const path = require('node:path');
 const fs = require('node:fs');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-
-// Helper sort function reflecting the server and client sorting logic
-function sortInternshipsList(internships, sort, appCountMap = {}) {
-    const list = [...internships];
-    if (sort === 'oldest') {
-        return list.sort((a, b) => {
-            const timeDiff = a._id.getTimestamp().getTime() - b._id.getTimestamp().getTime();
-            if (timeDiff !== 0) return timeDiff;
-            return a._id.toString().localeCompare(b._id.toString());
-        });
-    }
-    if (sort === 'most_applications' || sort === 'applications' || sort === 'applications_desc') {
-        return list.sort((a, b) => {
-            const countA = appCountMap[a._id.toString()] || 0;
-            const countB = appCountMap[b._id.toString()] || 0;
-            if (countB !== countA) return countB - countA;
-            const timeDiff = b._id.getTimestamp().getTime() - a._id.getTimestamp().getTime();
-            if (timeDiff !== 0) return timeDiff;
-            return b._id.toString().localeCompare(a._id.toString());
-        });
-    }
-    if (sort === 'deadline' || sort === 'deadline_soonest' || sort === 'deadline_asc') {
-        return list.sort((a, b) => {
-            const deadlineA = a.applicationDeadline ? new Date(a.applicationDeadline).getTime() : Infinity;
-            const deadlineB = b.applicationDeadline ? new Date(b.applicationDeadline).getTime() : Infinity;
-            if (deadlineA !== deadlineB) return deadlineA - deadlineB;
-            const timeDiff = b._id.getTimestamp().getTime() - a._id.getTimestamp().getTime();
-            if (timeDiff !== 0) return timeDiff;
-            return b._id.toString().localeCompare(a._id.toString());
-        });
-    }
-    // Default: newest
-    return list.sort((a, b) => {
-        const timeDiff = b._id.getTimestamp().getTime() - a._id.getTimestamp().getTime();
-        if (timeDiff !== 0) return timeDiff;
-        return b._id.toString().localeCompare(a._id.toString());
-    });
-}
+const {
+    companyDashboardStatusQuery,
+    normalizeDashboardSort,
+    normalizeDashboardStatus,
+    sortCompanyDashboardInternships
+} = require('../utils/companyDashboardFilters');
 
 test('company-dashboard.ejs renders sort control and matching options', () => {
     const templatePath = path.join(__dirname, '..', 'views', 'company', 'company-dashboard.ejs');
@@ -83,12 +51,19 @@ test('company-dashboard.ejs renders sort control and matching options', () => {
             }
         ],
         totalApplicationsCount: 12,
+        activeCount: 1,
+        closedCount: 0,
         publishedCount: 1,
         pausedCount: 0,
         draftCount: 1,
+        expiredCount: 0,
         totalCount: 2,
         currentFilter: 'all',
         currentSort: 'most_applications',
+        currentPage: 1,
+        pageCount: 2,
+        previousPageUrl: null,
+        nextPageUrl: '/company/dashboard?status=all&sort=most_applications&page=2',
         appCountMap: {
             [id1.toString()]: 10,
             [id2.toString()]: 2
@@ -98,6 +73,7 @@ test('company-dashboard.ejs renders sort control and matching options', () => {
     assert(html.includes('id="sortInternships"'), 'Must contain sortInternships select element');
     assert(html.includes('value="newest"'), 'Must have Newest sort option');
     assert(html.includes('value="oldest"'), 'Must have Oldest sort option');
+    assert(html.includes('value="title"'), 'Must have Title sort option');
     assert(html.includes('value="most_applications"'), 'Must have Most Applications sort option');
     assert(html.includes('value="deadline"'), 'Must have Application Deadline sort option');
     assert(html.includes('data-id='), 'Internship cards must have data-id attribute');
@@ -105,6 +81,33 @@ test('company-dashboard.ejs renders sort control and matching options', () => {
     assert(html.includes('data-applications="10"'), 'Internship cards must have data-applications attribute');
     assert(html.includes('data-deadline='), 'Internship cards must have data-deadline attribute');
     assert(html.includes('&amp;sort=most_applications') || html.includes('&sort=most_applications'), 'Filter tabs must preserve current sort parameter');
+    assert(html.includes('data-status="active"'), 'Must render an Active filter');
+    assert(html.includes('data-status="closed"'), 'Must render a Closed filter');
+    assert(html.includes('data-status="draft"'), 'Must render a Draft filter');
+    assert(html.includes('data-status="expired"'), 'Must render an Expired filter');
+    assert(html.includes('href="/company/dashboard?status=all&amp;sort=most_applications&amp;page=2"'), 'Pagination must preserve the current filter and sort');
+});
+
+test('dashboard filters normalize aliases and build deadline-aware lifecycle queries', () => {
+    const now = new Date('2026-09-27T12:00:00.000Z');
+
+    assert.equal(normalizeDashboardStatus('published'), 'active');
+    assert.equal(normalizeDashboardStatus('paused'), 'closed');
+    assert.equal(normalizeDashboardStatus('unknown'), 'all');
+    assert.equal(normalizeDashboardSort('applications_desc'), 'most_applications');
+    assert.equal(normalizeDashboardSort('title'), 'title');
+    assert.equal(normalizeDashboardSort('unknown'), 'newest');
+
+    const activeQuery = companyDashboardStatusQuery('active', now);
+    assert.deepEqual(activeQuery.status, { $in: ['published', null] });
+    assert.deepEqual(activeQuery.isPaused, { $ne: true });
+    assert.deepEqual(activeQuery.$or[2], { applicationDeadline: { $gte: now } });
+    assert.deepEqual(companyDashboardStatusQuery('draft', now), { status: 'draft' });
+    assert.deepEqual(companyDashboardStatusQuery('expired', now), {
+        status: { $nin: ['draft', 'closed'] },
+        applicationDeadline: { $lt: now }
+    });
+    assert.deepEqual(companyDashboardStatusQuery('all', now), {});
 });
 
 test('sort algorithm orders properly by newest and oldest with _id tie-breaker', () => {
@@ -115,11 +118,11 @@ test('sort algorithm orders properly by newest and oldest with _id tie-breaker',
     const itemOld = { _id: oldId, title: 'Old Role' };
     const itemNew = { _id: newId, title: 'New Role' };
 
-    const sortedNewest = sortInternshipsList([itemOld, itemNew], 'newest');
+    const sortedNewest = sortCompanyDashboardInternships([itemOld, itemNew], 'newest');
     assert.equal(sortedNewest[0]._id, newId);
     assert.equal(sortedNewest[1]._id, oldId);
 
-    const sortedOldest = sortInternshipsList([itemOld, itemNew], 'oldest');
+    const sortedOldest = sortCompanyDashboardInternships([itemOld, itemNew], 'oldest');
     assert.equal(sortedOldest[0]._id, oldId);
     assert.equal(sortedOldest[1]._id, newId);
 
@@ -131,11 +134,11 @@ test('sort algorithm orders properly by newest and oldest with _id tie-breaker',
     const itemTie1 = { _id: tieId1, title: 'Tie Role 1' };
     const itemTie2 = { _id: tieId2, title: 'Tie Role 2' };
 
-    const sortedTieOldest = sortInternshipsList([itemTie2, itemTie1], 'oldest');
+    const sortedTieOldest = sortCompanyDashboardInternships([itemTie2, itemTie1], 'oldest');
     assert.equal(sortedTieOldest[0]._id, tieId1);
     assert.equal(sortedTieOldest[1]._id, tieId2);
 
-    const sortedTieNewest = sortInternshipsList([itemTie1, itemTie2], 'newest');
+    const sortedTieNewest = sortCompanyDashboardInternships([itemTie1, itemTie2], 'newest');
     assert.equal(sortedTieNewest[0]._id, tieId2);
     assert.equal(sortedTieNewest[1]._id, tieId1);
 });
@@ -155,10 +158,23 @@ test('sort algorithm orders properly by most applications', () => {
         [idC.toString()]: 12
     };
 
-    const sorted = sortInternshipsList([itemA, itemB, itemC], 'most_applications', appCountMap);
+    const sorted = sortCompanyDashboardInternships([itemA, itemB, itemC], 'most_applications', appCountMap);
     assert.equal(sorted[0]._id, idB); // 25
     assert.equal(sorted[1]._id, idC); // 12
     assert.equal(sorted[2]._id, idA); // 5
+});
+
+test('sort algorithm orders titles alphabetically without case sensitivity', () => {
+    const idA = new mongoose.Types.ObjectId();
+    const idB = new mongoose.Types.ObjectId();
+    const internships = [
+        { _id: idA, title: 'zebra role' },
+        { _id: idB, title: 'Alpha role' }
+    ];
+
+    const sorted = sortCompanyDashboardInternships(internships, 'title');
+    assert.equal(sorted[0]._id, idB);
+    assert.equal(sorted[1]._id, idA);
 });
 
 test('sort algorithm orders properly by deadline (soonest first, no deadline last)', () => {
@@ -171,7 +187,7 @@ test('sort algorithm orders properly by deadline (soonest first, no deadline las
     const itemLater = { _id: idLater, applicationDeadline: new Date(now + 86400000 * 10) };
     const itemNoDeadline = { _id: idNoDeadline, applicationDeadline: null };
 
-    const sorted = sortInternshipsList([itemLater, itemNoDeadline, itemSoon], 'deadline');
+    const sorted = sortCompanyDashboardInternships([itemLater, itemNoDeadline, itemSoon], 'deadline');
     assert.equal(sorted[0]._id, idSoon);
     assert.equal(sorted[1]._id, idLater);
     assert.equal(sorted[2]._id, idNoDeadline);
