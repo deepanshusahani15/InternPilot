@@ -20,10 +20,18 @@ const {
     resendRateLimitAuditUpdate
 } = require('../utils/otpSecurity');
 
+/**
+ * Generates a cryptographically secure six-digit OTP.
+ * @returns {string} An OTP in the inclusive range 100000–999999.
+ */
 const generateSecureOTP = () => {
     return crypto.randomInt(100000, 1000000).toString();
 };
 
+/**
+ * Sends authenticated users to the appropriate dashboard before auth pages.
+ * @returns {void}
+ */
 const redirectIfAuthenticated = (req, res, next) => {
     if (req.isAuthenticated && req.isAuthenticated()) {
         if (req.user.role === 'admin') return res.redirect('/admin/dashboard');
