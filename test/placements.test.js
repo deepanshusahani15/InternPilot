@@ -101,6 +101,9 @@ test('offer acceptance creates the placement after the offer is accepted', async
         offerId: offer._id,
         candidateId: offer.candidate,
         now,
+        CandidateVerificationModel: {
+            async findOne() { return { status: 'approved' }; }
+        },
         OfferModel: {
             async findOneAndUpdate(filter, update) {
                 if (filter.status && filter.status !== offer.status) return null;

@@ -200,7 +200,7 @@ async function acceptOffer({
     InternshipModel = Internship,
     // Kept injectable because the offer lifecycle unit tests use in-memory
     // models. The application route always supplies the real Placement model.
-    PlacementModel = null
+    PlacementModel = null,
     CandidateVerificationModel = CandidateVerification
 }) {
     // This runs before the offer is moved into its short-lived `accepting`
